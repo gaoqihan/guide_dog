@@ -1,15 +1,12 @@
 import numpy as np
-import cv2
-import matplotlib.pyplot as plt
+import os
 
-# Replace this with the path to your .npy file
-file_path = '/home/qihan/NUS-Playground/tmp/depth/0.npy'
+# Print the current working directory
+print(os.getcwd())# Replace 'your_file.npy' with the path to your .npy file
+npy_file_path = './tmp/depth/0.npy'
 
-# Load the array
-array = np.load(file_path)
-array = cv2.convertScaleAbs(array, alpha=(255.0/65535.0))
-array= cv2.applyColorMap(array, cv2.COLORMAP_JET)
-plt.imshow(array)
-# Write the array to a file
-#np.savetxt('view', array)
-plt.show()
+# Load the .npy file
+data = np.load(npy_file_path)
+
+# Print the shape of the loaded data
+print(data.shape)

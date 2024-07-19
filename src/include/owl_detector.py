@@ -8,19 +8,36 @@ import torch
 class Detector:
     """Class that implements Owl v2 for object detection."""
     def __init__(self):
-        print("cuda is available:",torch.cuda.is_available())
+        #print("cuda is available:",torch.cuda.is_available())
         self.processor = Owlv2Processor.from_pretrained("google/owlv2-base-patch16-ensemble")
         self.model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-base-patch16-ensemble").to("cuda")
     
     def detect(self, image, texts):
+        #print("start detect objects",torch.cuda.mem_get_info())
+
         inputs = self.processor(texts, image, return_tensors="pt").to("cuda")
         with torch.no_grad():
             outputs = self.model(**inputs)
         # Convert model outputs to COCO API format.
-        target_sizes = torch.Tensor([image.size[::-1]])
-        results = self.processor.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=0.25)
+        #target_sizes = torch.Tensor([image.size[::-1]])
+        target_sizes=[(image.size[1],image.size[0])]
+        results = self.processor.post_process_object_detection(outputs=outputs, threshold=0.25)
+        box=results[0]["boxes"]*960
 
+        a=image.size[0]/960
+        box *= a 
+
+        results[0]["boxes"]=box
+        
+       
+        del outputs
+        del inputs
+        del target_sizes
+        torch.cuda.empty_cache()
+        #print("finish detect objects",torch.cuda.mem_get_info())
+        #print(type(results))
         return results
+
     
     def displayBoundingBox(self,image,results,text):
 

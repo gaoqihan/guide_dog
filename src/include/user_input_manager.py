@@ -8,6 +8,7 @@ from PIL import Image
 import numpy as np
 import sys
 import rospy
+import torch
 # Add the '../include' directory to sys.path to import modules from there
 script_dir = os.path.dirname(__file__)  # Get the directory where the script is located
 include_dir = os.path.join(script_dir, '../include')  # Path to the 'include' directory
@@ -20,8 +21,8 @@ class UserInputManager:
     def __init__(self):
 
         self.content=[]
-        self.model = whisper.load_model("base")
-        
+        #self.audio_model = whisper.load_model("base")
+        self.detector = Detector()
     def add_new_input(self,user_input):
         self.assign_id(user_input)
         self.content.append(user_input)
@@ -97,25 +98,22 @@ class UserInputManager:
         user_input = self.get_input_by_id(id)
         user_input.request[texts[0]] = []
         if user_input.type == "video":
-            detector = Detector()
             for image in user_input.data:
-                results = detector.detect(image, texts)
+                results = self.detector.detect(image, texts)
                 #print(results)
-                labeled_image=detector.displayBoundingBox(image,results,texts)
+                labeled_image=self.detector.displayBoundingBox(image,results,texts)
                 #image.show()
                 user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})
         
         elif user_input.type == "RGBD_set":
-            detector = Detector()
             user_input.request[texts[0]] = []
             for image, depth in user_input.data:
-                results = detector.detect(image, texts)
-                labeled_image=detector.displayBoundingBox(image,results,texts)
+                results = self.detector.detect(image, texts)
+                labeled_image=self.detector.displayBoundingBox(image,results,texts)
                 user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})
              
         else:
             raise TypeError("Invalid input type")
-        
         
         
 

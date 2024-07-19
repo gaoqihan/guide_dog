@@ -5,6 +5,7 @@ import numpy as np
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 import matplotlib.pyplot as plt
 import cv2
+import torch
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
@@ -33,27 +34,39 @@ class SegAny:
         self.sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
         self.sam.to(device="cuda")
         self.mask_generator = SamAutomaticMaskGenerator(self.sam)
-        self.predictor = SamPredictor(self.sam)
         self.image = None
         print("SegAny Model loaded")
 
     def encode(self, input_image):
+        self.predictor = SamPredictor(self.sam)
+
         self.image = cv2.cvtColor(np.array(input_image), cv2.COLOR_RGB2BGR)
+        
+
         return self.predictor.set_image(self.image)
     
     def get_mask(self):
         self.input_point = np.array([[self.image.shape[1] // 2, self.image.shape[0] // 2]])
 
         self.input_label = np.array([1])
-        self.masks, self.scores, self.logits = self.predictor.predict(
+        self.masks, self.scores, self.logit = self.predictor.predict(
             point_coords=self.input_point,
             point_labels=self.input_label,
             multimask_output=True,
         )
 
         highest_score_mask = self.masks[np.argmax(self.scores)]
+        torch.cuda.empty_cache()
+        del self.masks
+        del self.scores
+        del self.logit
+        self.predictor.reset_image()
+        self.delete_predictor()
         return highest_score_mask
-
+    
+    def delete_predictor(self):
+        del self.predictor
+        torch.cuda.empty_cache()
     def get_mask_image(self):
         for i, (mask, score) in enumerate(zip(self.masks, self.scores)):
             plt.figure(figsize=(10,10))

@@ -18,8 +18,10 @@ class VideoQueue(object):
         self.window = 5
         self.pause = False  # Initialize the pause attribute
         # Create directories if they don't exist
-        os.makedirs('./tmp/color', exist_ok=True)
-        os.makedirs('./tmp/depth', exist_ok=True)
+        self.color_dir = os.path.expanduser('~/catkin_ws/src/guide_dog/src/tmp/color')
+        self.depth_dir = os.path.expanduser('~/catkin_ws/src/guide_dog/src/tmp/depth')
+        os.makedirs(self.color_dir, exist_ok=True)
+        os.makedirs(self.depth_dir, exist_ok=True)
 
     def color_callback(self, data):
         self.color_image = self.bridge.imgmsg_to_cv2(data, desired_encoding='bgr8')
@@ -30,24 +32,24 @@ class VideoQueue(object):
 
         rate = rospy.Rate(1)  # 1 fps
 
-        number_of_files = len(os.listdir('./tmp/depth'))
+        number_of_files = len(os.listdir(self.depth_dir))
         if number_of_files < self.window:
-            cv2.imwrite(f'./tmp/color/{number_of_files}.png', self.color_image)
+            cv2.imwrite(f'{self.color_dir}/{number_of_files}.png', self.color_image)
             self.depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="16UC1")
-            np.save(f'./tmp/depth/{number_of_files}.npy', self.depth_image)
+            np.save(f'{self.depth_dir}/{number_of_files}.npy', self.depth_image)
             print(f"Saved image {number_of_files}.npy' at {time()}")
             rate.sleep()
             return
 
         self.depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="16UC1")
-        os.remove(f'./tmp/color/0.png')
-        os.remove(f'./tmp/depth/0.npy')
+        os.remove(f'{self.color_dir}/0.png')
+        os.remove(f'{self.depth_dir}/0.npy')
         for j in range(1, self.window):
-            os.rename(f'./tmp/color/{j}.png', f'./tmp/color/{j-1}.png')
-            os.rename(f'./tmp/depth/{j}.npy', f'./tmp/depth/{j-1}.npy')
+            os.rename(f'{self.color_dir}/{j}.png', f'{self.color_dir}/{j-1}.png')
+            os.rename(f'{self.depth_dir}/{j}.npy', f'{self.depth_dir}/{j-1}.npy')
 
-        cv2.imwrite(f'./tmp/color/{self.window-1}.png', self.color_image)
-        np.save(f'./tmp/depth/{self.window-1}.npy', self.depth_image)
+        cv2.imwrite(f'{self.color_dir}/{self.window-1}.png', self.color_image)
+        np.save(f'{self.depth_dir}/{self.window-1}.npy', self.depth_image)
         print(f"Saved image at {time()}")
 
         rate.sleep()
