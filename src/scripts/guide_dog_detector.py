@@ -17,7 +17,7 @@ def video_capture_client():
 
     # Creates a goal to send to the action server
     goal = ObjectDetectorGoal()
-    goal.task="find me an empty place to sit"
+    goal.task="i want to buy some water"
 
     # Sends the goal to the action server, specifying which feedback function to call when feedback received
     client.send_goal(goal, feedback_cb=feedback_cb)

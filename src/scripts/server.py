@@ -13,6 +13,7 @@ import sys  # Import sys module
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 from sklearn.cluster import KMeans
 from scipy import stats
+import json
 
 
 # Add the '../include' directory to sys.path to import modules from there
@@ -56,16 +57,26 @@ class UserInputManagerServer(object):
 
 
         print(self.manager.get_most_recent_input().id)
+        caller=GPTCaller()
 
         #distill the task thruough gpt
-        #assume done
-        owl_keyword=["chair"]
-        gpt_keyword="Which bounding box contains closest empty chair?"
 
+        with open('./prompts/distillation/system_prompt', 'r') as file:
+            system_prompt = file.read()
+        user_prompt=goal.task
+        caller.create_prompt([user_prompt],system_prompt_list=[system_prompt])
+        response=caller.call()
+        result_dict = json.loads(response)
+
+        #assume done
+        owl_keyword=result_dict["keyword"]
+        gpt_keyword=result_dict["key instruction"]
+
+        print(owl_keyword,gpt_keyword)
+        return
         #get bounding boxes through owl
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
-        caller=GPTCaller()
         system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in bounding boxes with a number on the top left corner. Pick the bounding box that contains requested item by anwsering the number.return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
 
@@ -120,7 +131,7 @@ class UserInputManagerServer(object):
             image=rgbd_set.data[i][1]
 
             sum_check=np.sum(image[y1:y2,x1:x2], axis=(0, 1))
-            print("sumcheck",sum_check)
+            #print("sumcheck",sum_check)
             world_points=get3d(image,(x1,y1,x2,y2),info)
             masked_world_points=mask[:,:,np.newaxis]*world_points
             sum_result=np.sum(masked_world_points, axis=(0, 1))

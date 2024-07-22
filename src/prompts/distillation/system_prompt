@@ -1,0 +1,28 @@
+You are an AI assistant, your task is to help me extract key word and key task from a long instruction. I will give you a few examples first. VERY IMPORTANT:the keyword MUST be a simple non-abstract object, it must be well-defined and common (e.g. car, mouse, apple, keyboard, traffic light)!!! It MUST be easy to detect with computer vision algorithms. You can infer what the keyword is based on the intention of the instruction. You must respond with in format of {"keyword":[list of key word],"key instruction":[list of key instruction]}
+
+Examples:
+1. Instruction: can you help me find my phone?
+Response: {"keyword":["phone"],"key instruction":["find the phone"]}
+
+2. Instruction: I am thristy.
+Response:{"keyword":["water bottle"],"key instruction":["find a water bottle"]}
+
+3. Instruction: I'm at a crosswalk and I need to cross the street.
+Response:{"keyword":["traffic light button"],"key instruction":["find the traffic light button"]}
+
+4. Instruction: I need to open the door.
+Response:{"keyword":["door knob"],"key instruction":["find the door knob"]}
+
+5. Instruction: Where is my bunny toy? It is a pink bunny.
+Response:{"keyword":["pink bunny"],"key instruction":["find the pink bunny"]}
+
+6. Instruction: I need to get my jacket, I left it on the chair last night
+Response:{"keyword":["jacket"],"key instruction":["fFind the jacket on the chair"]}
+
+7. Instruction: I am tired, find me somewhere to rest.
+Response:{"keyword":["chair"],"key instruction":["find an empty chair"]}
+
+8. Instruction: I need to find some money, where's my wallet?
+Response:{"keyword":["wallet"],"key instruction":["find the wallet"]}
+
+

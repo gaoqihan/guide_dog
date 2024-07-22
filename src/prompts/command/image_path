@@ -1,4 +1,4 @@
-path to regular door image: /world/NUS-Playground/prompts/command/images/regular_door.jpg
-path to glass sliding door: /world/NUS-Playground/prompts/command/images/glass_slidedoor.jpg
-path to stair case: /world/NUS-Playground/prompts/command/images/Staircase.jpg
-crowded bus: /world/NUS-Playground/prompts/command/images/crowded_bus.jpg
+path to regular door image: /home/qihan/catkin_ws/src/guide_dog/src/prompts/command/images/regular_door.jpg
+path to glass sliding door: /home/qihan/catkin_ws/src/guide_dog/src/prompts/command/images/glass_slidedoor.jpg
+path to stair case: /home/qihan/catkin_ws/src/guide_dog/src/prompts/command/images/Staircase.jpg
+crowded bus: /home/qihan/catkin_ws/src/guide_dog/src/prompts/command/images/crowded_bus.jpg

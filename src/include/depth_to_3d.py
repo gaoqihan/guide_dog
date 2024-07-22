@@ -43,23 +43,28 @@ def get3d(image,bounding_box,info):
     v_range = numpy.arange(uv1[1], uv2[1])
     u_mesh, v_mesh = numpy.meshgrid(u_range, v_range)
 
-    x_mesh=(u_mesh-cam_model.cx())/cam_model.fx()
-    y_mesh=(v_mesh-cam_model.cy())/cam_model.fy()
+    #x_mesh=(u_mesh-cam_model.cx())/cam_model.fx()
+    #y_mesh=(v_mesh-cam_model.cy())/cam_model.fy()
     
-    norm = numpy.sqrt(x_mesh*x_mesh + y_mesh*y_mesh + 1)
+    #norm = numpy.sqrt(x_mesh*x_mesh + y_mesh*y_mesh + 1)
 
     #print(x_mesh.shape,y_mesh.shape,norm.shape,(x_mesh/norm).shape)
-    x_mesh /= norm
-    y_mesh /= norm
-    z_mesh = 1.0 / norm
+    #x_mesh /= norm
+    #y_mesh /= norm
+    #z_mesh = 1.0 / norm
     #z_mesh = numpy.ones_like(x_mesh) * 1.0
     #print(z_mesh.shape,)
-    center_point=(int((x2-x1)/2+x1), int((y2-y1)/2+y1))
-    print("center point is",center_point)
-    xyz_ref=d_ref*numpy.array(cam_model.projectPixelTo3dRay(center_point))
-    print("real_z is", real_z,"ref_z",xyz_ref[2],"image_value",d_ref)
+    #center_point=(int((x2-x1)/2+x1), int((y2-y1)/2+y1))
+    #print("center point is",center_point)
+    #xyz_ref=d_ref*numpy.array(cam_model.projectPixelTo3dRay(center_point))
+    #print("real_z is", real_z,"ref_z",xyz_ref[2],"image_value",d_ref)
 
+    
+    #xyz_mesh= numpy.stack((x_mesh, y_mesh, z_mesh), axis=-1)
+    #point_cloud=d[:, :, numpy.newaxis]*xyz_mesh
 
-    xyz_mesh= numpy.stack((x_mesh, y_mesh, z_mesh), axis=-1)
-    point_cloud=d[:, :, numpy.newaxis]*xyz_mesh
+    real_z = image[y1:y2, x1:x2] * 0.001
+    x_mesh=(u_mesh-cam_model.cx())/cam_model.fx()*real_z
+    y_mesh=(v_mesh-cam_model.cy())/cam_model.fy()*real_z
+    point_cloud=numpy.stack((x_mesh, y_mesh, real_z), axis=-1)
     return point_cloud

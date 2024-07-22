@@ -93,11 +93,11 @@ class GPTCaller:
         })
         self.messages=messages
 
-    def call(self):
+    def call(self,temperature=0):
 
         completion = self.client.chat.completions.create(
         model="gpt-4o",
-        messages=self.messages,temperature=0
+        messages=self.messages,temperature=temperature
         )
 
         #print(completion.choices[0].message)
