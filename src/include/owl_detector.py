@@ -11,7 +11,7 @@ class Detector:
         #print("cuda is available:",torch.cuda.is_available())
         self.processor = Owlv2Processor.from_pretrained("google/owlv2-base-patch16-ensemble")
         self.model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-base-patch16-ensemble").to("cuda")
-    
+
     def detect(self, image, texts):
         #print("start detect objects",torch.cuda.mem_get_info())
 
@@ -22,13 +22,14 @@ class Detector:
         #target_sizes = torch.Tensor([image.size[::-1]])
         target_sizes=[(image.size[1],image.size[0])]
         results = self.processor.post_process_object_detection(outputs=outputs, threshold=0.25)
+
         box=results[0]["boxes"]*960
 
         a=image.size[0]/960
         box *= a 
 
         results[0]["boxes"]=box
-        
+
        
         del outputs
         del inputs
@@ -40,6 +41,7 @@ class Detector:
 
     
     def displayBoundingBox(self,image,results,text):
+
 
         # Retrieve predictions for the first image.
         i = 0
@@ -55,7 +57,7 @@ class Detector:
             draw.rectangle(xy=((x1, y1), (x2, y2)), outline="red")
             font_size = 40
             font = ImageFont.load_default(size=font_size)
-            draw.text(xy=(x1, y1), text=str(i), font=font)
+            draw.text(xy=(x1, y1), text=str(i), font=font, fill="green")
             i += 1
         return copied_image
 

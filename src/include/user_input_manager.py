@@ -111,7 +111,6 @@ class UserInputManager:
                 results = self.detector.detect(image, texts)
                 labeled_image=self.detector.displayBoundingBox(image,results,texts)
                 user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})
-             
         else:
             raise TypeError("Invalid input type")
         

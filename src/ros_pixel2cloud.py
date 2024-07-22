@@ -23,9 +23,8 @@ import math
 
 def callback(data):
     cv_image = bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
-    print(type(cv_image))
     cam_model = image_geometry.PinholeCameraModel()
-    x1, y1, x2, y2= 0, 0, 360, 640
+    x1, y1, x2, y2= 0, 0, 320, 240
     d_ref=cv_image[y2,x2]
     
     d = cv_image[y1:y2, x1:x2]
@@ -37,8 +36,8 @@ def callback(data):
     v_range = numpy.arange(uv1[1], uv2[1])
     u_mesh, v_mesh = numpy.meshgrid(u_range, v_range)
 
-    x_mesh=(v_mesh-cam_model.cx())/cam_model.fx()
-    y_mesh=(u_mesh-cam_model.cy())/cam_model.fy()
+    x_mesh=(u_mesh-cam_model.cx())/cam_model.fx()
+    y_mesh=(v_mesh-cam_model.cy())/cam_model.fy()
     
     norm = numpy.sqrt(x_mesh*x_mesh + y_mesh*y_mesh + 1)
 
@@ -47,7 +46,7 @@ def callback(data):
     y_mesh /= norm
     z_mesh = 1.0 / norm
     
-    xyz_ref=cam_model.projectPixelTo3dRay((y2,x2))
+    xyz_ref=cam_model.projectPixelTo3dRay((x2,y2))
     
 
     xyz_mesh= numpy.stack((x_mesh, y_mesh, z_mesh), axis=-1)

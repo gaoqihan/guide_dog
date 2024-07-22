@@ -57,17 +57,18 @@ class SegAny:
 
         highest_score_mask = self.masks[np.argmax(self.scores)]
         torch.cuda.empty_cache()
-        del self.masks
-        del self.scores
-        del self.logit
-        self.predictor.reset_image()
-        self.delete_predictor()
+        #del self.masks
+        #del self.scores
+        #del self.logit
+        #self.predictor.reset_image()
+        #self.delete_predictor()
         return highest_score_mask
     
     def delete_predictor(self):
         del self.predictor
         torch.cuda.empty_cache()
-    def get_mask_image(self):
+
+    def get_mask_image(self,filename=None):
         for i, (mask, score) in enumerate(zip(self.masks, self.scores)):
             plt.figure(figsize=(10,10))
             plt.imshow(self.image)
@@ -75,4 +76,5 @@ class SegAny:
             show_points(self.input_point, self.input_label, plt.gca())
             plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
             plt.axis('off')
-            plt.show() 
+            #plt.show() 
+            plt.savefig(filename)
