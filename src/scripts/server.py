@@ -14,6 +14,7 @@ import sys  # Import sys module
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 from scipy import stats
 import json
+from time import time
 
 
 # Add the '../include' directory to sys.path to import modules from there
@@ -84,7 +85,7 @@ class UserInputManagerServer(object):
 
         for i in range(len(rgbd_set.request[owl_keyword[0]])):
             print(i)
-
+            start_time=time()
             if len(rgbd_set.request[owl_keyword[0]][i]["boxes"])==0:
                 print(f"no bounding box in frame {i}")
                 continue
@@ -140,6 +141,7 @@ class UserInputManagerServer(object):
             print(f"the {owl_keyword} is at {world_point_mean}")
             stacked_world_points.append(world_point_mean)
             #combine with the dog's pose to get world coordinante
+            print(f"frame {i} took {time()-start_time} seconds")
         stacked_world_points=np.array(stacked_world_points)
         #remove outliers
         # Calculate Z-scores
