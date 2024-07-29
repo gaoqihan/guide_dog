@@ -1,7 +1,8 @@
+from sklearn.cluster import KMeans
 import rospy
 import actionlib
-from cv_bridge import CvBridge
 import cv2
+from cv_bridge import CvBridge
 import numpy as np
 import os
 from sensor_msgs.msg import Image,CameraInfo
@@ -11,7 +12,6 @@ import torch
 import subprocess  # Import subprocess module
 import sys  # Import sys module
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
-from sklearn.cluster import KMeans
 from scipy import stats
 import json
 
@@ -36,9 +36,9 @@ class UserInputManagerServer(object):
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
 
         
-        self.manager=UserInputManager()
+        self.manager=UserInputManager(model="nano")
         print("UserInputManager Initialized")
-        self.seg_any=SegAny()
+        self.seg_any=SegAny(model="nano")
         print("Server started")
     def get_info(self,data):
         global info
@@ -73,7 +73,7 @@ class UserInputManagerServer(object):
         gpt_keyword=result_dict["key instruction"]
 
         print(owl_keyword,gpt_keyword)
-        return
+        
         #get bounding boxes through owl
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
@@ -82,25 +82,25 @@ class UserInputManagerServer(object):
 
         stacked_world_points=[]
 
-        for i in range(len(rgbd_set.request["chair"])):
+        for i in range(len(rgbd_set.request[owl_keyword[0]])):
             print(i)
 
-            if len(rgbd_set.request["chair"][i]["boxes"])==0:
+            if len(rgbd_set.request[owl_keyword[0]][i]["boxes"])==0:
                 print(f"no bounding box in frame {i}")
                 continue
-            selection_range="choose from following numbers"+str(range(len(rgbd_set.request["chair"][i]["boxes"])))
-            caller.create_prompt([user_prompt,selection_range,rgbd_set.request["chair"][i]["image"]],system_prompt_list=[system_prompt])
+            selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
+            caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
  
             response=caller.call()
             #response=0
             print(f"gpt selected bounding box is {response}")
-            if response==-1:
+            if int(response)==-1:
                 print(f"target not found in frame {i}")
                 continue
 
             #print(len(rgbd_set.request["chair"]),len(rgbd_set.request["chair"][i]["boxes"]),i,int(response))
             try:
-                x1, y1, x2, y2 = tuple(rgbd_set.request["chair"][i]["boxes"][int(response)])
+                x1, y1, x2, y2 = tuple(rgbd_set.request[owl_keyword[0]][i]["boxes"][int(response)])
             except:
                 print(f"gpt error in frame {i}")
                 continue
@@ -126,7 +126,8 @@ class UserInputManagerServer(object):
             os.makedirs("./tmp/masked", exist_ok=True)
             self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
             number_of_true = np.sum(mask)
-
+            #print(f"number of true pixels in mask is {number_of_true}",mask.shape)
+            #return
             #get depth point
             image=rgbd_set.data[i][1]
 

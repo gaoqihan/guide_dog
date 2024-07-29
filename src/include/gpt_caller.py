@@ -9,7 +9,7 @@ import shutil
 
 class GPTCaller:
     def __init__(self):
-        self.client = OpenAI()
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         directory = "./tmp/temp"
 
         # Remove the directory if it exists
@@ -96,7 +96,7 @@ class GPTCaller:
     def call(self,temperature=0):
 
         completion = self.client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages=self.messages,temperature=temperature
         )
 

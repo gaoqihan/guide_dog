@@ -18,11 +18,11 @@ sys.path.append(include_dir)  # Add 'include' directory to sys.path
 from owl_detector import Detector
 
 class UserInputManager:
-    def __init__(self):
-
+    def __init__(self,model="default"):
+        self.model=model
         self.content=[]
         #self.audio_model = whisper.load_model("base")
-        self.detector = Detector()
+        self.detector = Detector(model=self.model)
     def add_new_input(self,user_input):
         self.assign_id(user_input)
         self.content.append(user_input)
@@ -110,7 +110,11 @@ class UserInputManager:
             for image, depth in user_input.data:
                 results = self.detector.detect(image, texts)
                 labeled_image=self.detector.displayBoundingBox(image,results,texts)
-                user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})
+                if self.model=="default":
+                    user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})
+                elif self.model=="nano":
+                    user_input.request[texts[0]].append({"boxes":results.boxes.tolist(),"image":labeled_image})
+
         else:
             raise TypeError("Invalid input type")
         
