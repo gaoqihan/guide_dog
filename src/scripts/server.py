@@ -31,7 +31,7 @@ from depth_to_3d import get3d
 
 class UserInputManagerServer(object):
     def __init__(self):
-        self.action_server = actionlib.SimpleActionServer('video_capture_action', ObjectDetectorAction, self.execute, False)
+        self.action_server = actionlib.SimpleActionServer('visual_locator_action', ObjectDetectorAction, self.execute, False)
         self.action_server.start()
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
@@ -45,7 +45,20 @@ class UserInputManagerServer(object):
         global info
         info = data
     def execute(self, goal):
-        print(goal.task)
+        print(goal.type)
+        if goal.type=="audio":
+            audio_input=UserAudio(goal.file_path)
+            self.manager.add_new_input(audio_input)
+            goal_text=self.manager.transcribe_audio(audio_input.id)
+            self.task=goal_text
+            self.excute_text()
+        elif goal.type=="text":
+            self.task=goal.task
+            self.excute_text()
+        
+        
+    def excute_text(self):
+        print(self.task)
         #rospy.loginfo("Video capture request received, processing...")
         feedback = ObjDetectorFeedback()
         result = ObjDetectorResult()
@@ -64,7 +77,7 @@ class UserInputManagerServer(object):
 
         with open('./prompts/distillation/system_prompt', 'r') as file:
             system_prompt = file.read()
-        user_prompt=goal.task
+        user_prompt=self.task
         caller.create_prompt([user_prompt],system_prompt_list=[system_prompt])
         response=caller.call()
         result_dict = json.loads(response)
@@ -93,47 +106,38 @@ class UserInputManagerServer(object):
             caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
  
             response=caller.call()
+            print("time for gpt call is: ", time()-start_time)
             #response=0
             print(f"gpt selected bounding box is {response}")
             if int(response)==-1:
                 print(f"target not found in frame {i}")
                 continue
 
-            #print(len(rgbd_set.request["chair"]),len(rgbd_set.request["chair"][i]["boxes"]),i,int(response))
             try:
                 x1, y1, x2, y2 = tuple(rgbd_set.request[owl_keyword[0]][i]["boxes"][int(response)])
             except:
                 print(f"gpt error in frame {i}")
                 continue
-            #print(x1,y1,x2,y2)
             x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-            #print(x1,y1,x2,y2)
             # Cap the x2 and y2 values at the image's width and height
             x1 = max(x1, 0)
             y1 = max(y1, 0)
             x2 = min(x2, rgbd_set.data[i][0].width)
             y2 = min(y2, rgbd_set.data[i][0].height)
-            #print(x1,y1,x2,y2)
             cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
             #get segmentation mask
             self.seg_any.encode(cropped_image)
 
             mask=self.seg_any.get_mask()
-            #self.seg_any.predictor=SamPredictor(self.seg_any.sam)
-            #self.seg_any.predictor.set_image(self.seg_any.image)
-            #print(mask.shape)
-
             #save the masked cropped image in /tem/masked
             os.makedirs("./tmp/masked", exist_ok=True)
             self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
             number_of_true = np.sum(mask)
-            #print(f"number of true pixels in mask is {number_of_true}",mask.shape)
-            #return
+ 
             #get depth point
             image=rgbd_set.data[i][1]
 
             sum_check=np.sum(image[y1:y2,x1:x2], axis=(0, 1))
-            #print("sumcheck",sum_check)
             world_points=get3d(image,(x1,y1,x2,y2),info)
             masked_world_points=mask[:,:,np.newaxis]*world_points
             sum_result=np.sum(masked_world_points, axis=(0, 1))

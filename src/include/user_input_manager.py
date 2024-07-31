@@ -21,7 +21,7 @@ class UserInputManager:
     def __init__(self,model="default"):
         self.model=model
         self.content=[]
-        #self.audio_model = whisper.load_model("base")
+        self.audio_model = whisper.load_model("base")
         self.detector = Detector(model=self.model)
     def add_new_input(self,user_input):
         self.assign_id(user_input)
@@ -69,7 +69,7 @@ class UserInputManager:
         audio_input = self.get_input_by_id(id)
         if audio_input.type != "audio":
             raise TypeError("Invalid input type")
-        result = self.model.transcribe(audio_input.audio_file)["text"]
+        result = self.audio_model.transcribe(audio_input.audio_file)["text"]
         audio_input.data = result
         return result
     
@@ -128,10 +128,10 @@ class UserInput:
         self.data=None
         self.request={}
 class UserAudio(UserInput):
-    def __init__(self,file):
+    def __init__(self,file_path):
         super().__init__()
         self.type="audio"
-        self.audio_file = file
+        self.audio_file = file_path
         
 class UserVideo(UserInput):
     def __init__(self,file):

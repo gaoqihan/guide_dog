@@ -51,7 +51,7 @@ class Detector:
             return results
         elif self.model=="nano":
             text_encodings = self.predictor.encode_text(texts)
-            results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.1)
+            results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.25)
 
             #print(output)
             return results

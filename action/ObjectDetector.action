@@ -1,5 +1,7 @@
 # Goal
 string task
+string file_path
+string type
 ---
 # Result
 bool success
