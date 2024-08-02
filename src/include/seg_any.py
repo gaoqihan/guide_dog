@@ -76,7 +76,7 @@ class SegAny:
                 [self.image.width-1, self.image.height-1]
             ])
 
-            point_labels = np.array([2, 3])
+            point_labels = np.array([2,3])
             #print("before predict")  
             mask, _, _ = self.predictor.predict(points, point_labels)
             #print("after predict")

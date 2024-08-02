@@ -19,14 +19,14 @@ def get3d(image,bounding_box,info,index):
     print(image.shape,d.shape)
     os.makedirs("./tmp/cropped_depth", exist_ok=True)
     plt.figure(figsize=(10,10))
-    plt.imshow(d, cmap='gray')
+    plt.imshow(d, cmap='viridis')
     plt.axis('off')
     #plt.show() 
 
 
     plt.savefig(f"./tmp/cropped_depth/{str(index)}.png")
     plt.figure(figsize=(10,10))
-    plt.imshow(image, cmap='gray')
+    plt.imshow(image, cmap='viridis')
     plt.axis('off')
     #plt.show() 
 

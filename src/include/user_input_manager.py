@@ -109,7 +109,7 @@ class UserInputManager:
             user_input.request[texts[0]] = []
             for image, depth in user_input.data:
                 results = self.detector.detect(image, texts)
-                print(results)
+                #print(results)
                 labeled_image=self.detector.displayBoundingBox(image,results,texts)
                 if self.model=="default":
                     user_input.request[texts[0]].append({"boxes":results[0]["boxes"].tolist(),"image":labeled_image})

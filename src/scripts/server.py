@@ -27,7 +27,7 @@ from user_input_manager import UserInputManager, UserInput, UserAudio, UserVideo
 from gpt_caller import GPTCaller
 from seg_any import SegAny
 from depth_to_3d import get3d
-
+from utils import extract_number_from_brackets
 
 class UserInputManagerServer(object):
     def __init__(self):
@@ -87,22 +87,21 @@ class UserInputManagerServer(object):
         gpt_keyword=result_dict["key instruction"]
 
         print(owl_keyword,gpt_keyword)
-        
         #get bounding boxes through owl
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
-        system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in bounding boxes with a number on the top left corner. Pick the bounding box that contains requested item by anwsering the number.return nothing but the number. Return -1 if not found."
+        system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in bounding boxes with a number on the top left corner. Pick the bounding box that contains requested item by anwsering the number. reason about each bounding box on why or why not it is selected, then return your selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
 
         stacked_world_points=[]
-
-        for item in os.listdir("./tmp/cropped_depth"):
-            item_path = os.path.join("./tmp/cropped_depth", item)
-            try:
-                os.remove(item_path)  # Remove files and links
-                print(f"Deleted {item_path}")
-            except Exception as e:
-                print(f"Failed to delete {item_path}. Reason: {e}")
+        if os.path.exists("./tmp/cropped_depth"):
+            for item in os.listdir("./tmp/cropped_depth"):
+                item_path = os.path.join("./tmp/cropped_depth", item)
+                try:
+                    os.remove(item_path)  # Remove files and links
+                    print(f"Deleted {item_path}")
+                except Exception as e:
+                    print(f"Failed to delete {item_path}. Reason: {e}")
 
         for i in range(len(rgbd_set.request[owl_keyword[0]])):
             print(i)
@@ -114,6 +113,10 @@ class UserInputManagerServer(object):
             caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
  
             response=caller.call()
+            print(f"gpt response is {response}")
+            response=extract_number_from_brackets(response)
+            
+            
             print("time for gpt call is: ", time()-start_time)
             #response=0
             print(f"gpt selected bounding box is {response}")
@@ -155,17 +158,18 @@ class UserInputManagerServer(object):
             stacked_world_points.append(world_point_mean)
             #combine with the dog's pose to get world coordinante
             print(f"frame {i} took {time()-start_time} seconds")
-        stacked_world_points=np.array(stacked_world_points)
-        #remove outliers
-        # Calculate Z-scores
-        z_scores = np.abs(stats.zscore(stacked_world_points, axis=0))
+        if len(stacked_world_points)>1:    
+            stacked_world_points=np.array(stacked_world_points)
+            #remove outliers
+            # Calculate Z-scores
+            z_scores = np.abs(stats.zscore(stacked_world_points, axis=0))
 
-        # Set a threshold (e.g., 3) for identifying outliers
-        threshold = 2
+            # Set a threshold (e.g., 3) for identifying outliers
+            threshold = 2
 
-        # Remove outliers
-        non_outliers = (z_scores < threshold).all(axis=1)
-        stacked_world_points = stacked_world_points[non_outliers]
+            # Remove outliers
+            non_outliers = (z_scores < threshold).all(axis=1)
+            stacked_world_points = stacked_world_points[non_outliers]
 
 
 

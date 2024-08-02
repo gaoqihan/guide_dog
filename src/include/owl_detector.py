@@ -68,7 +68,7 @@ class Detector:
         elif self.model_type=="nano":
             text_encodings = self.predictor.encode_text(texts)
             results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.1)
-            print(results)
+            #print(results)
             boxes, scores, labels = results.boxes, results.scores, results.labels
             topk=min(3,scores.size(0))
             # Sort scores in descending order and get the top 3 indices
