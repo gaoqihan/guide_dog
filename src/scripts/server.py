@@ -96,6 +96,14 @@ class UserInputManagerServer(object):
 
         stacked_world_points=[]
 
+        for item in os.listdir("./tmp/cropped_depth"):
+            item_path = os.path.join("./tmp/cropped_depth", item)
+            try:
+                os.remove(item_path)  # Remove files and links
+                print(f"Deleted {item_path}")
+            except Exception as e:
+                print(f"Failed to delete {item_path}. Reason: {e}")
+
         for i in range(len(rgbd_set.request[owl_keyword[0]])):
             print(i)
             start_time=time()
@@ -125,6 +133,7 @@ class UserInputManagerServer(object):
             x2 = min(x2, rgbd_set.data[i][0].width)
             y2 = min(y2, rgbd_set.data[i][0].height)
             cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
+            print(f"cropped image size is {cropped_image.size}") 
             #get segmentation mask
             self.seg_any.encode(cropped_image)
 
@@ -138,7 +147,7 @@ class UserInputManagerServer(object):
             image=rgbd_set.data[i][1]
 
             sum_check=np.sum(image[y1:y2,x1:x2], axis=(0, 1))
-            world_points=get3d(image,(x1,y1,x2,y2),info)
+            world_points=get3d(image,(x1,y1,x2,y2),info,i)
             masked_world_points=mask[:,:,np.newaxis]*world_points
             sum_result=np.sum(masked_world_points, axis=(0, 1))
             world_point_mean=sum_result/number_of_true

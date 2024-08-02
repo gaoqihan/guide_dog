@@ -8,29 +8,30 @@ import os
 import matplotlib.pyplot as plt
 import shutil
 
-def get3d(image,bounding_box,info):
+def get3d(image,bounding_box,info,index):
     bridge = CvBridge()
     cam_model = image_geometry.PinholeCameraModel()
     x1, y1, x2, y2= bounding_box
     #d_ref=image[y2,x2]
     
     d = image[y1:y2, x1:x2]
+    
+    print(image.shape,d.shape)
     os.makedirs("./tmp/cropped_depth", exist_ok=True)
+    plt.figure(figsize=(10,10))
+    plt.imshow(d, cmap='gray')
+    plt.axis('off')
+    #plt.show() 
+
+
+    plt.savefig(f"./tmp/cropped_depth/{str(index)}.png")
     plt.figure(figsize=(10,10))
     plt.imshow(image, cmap='gray')
     plt.axis('off')
     #plt.show() 
-    index=len(os.listdir("./tmp/cropped_depth"))
-    if index==5:
-        for item in os.listdir("./tmp/cropped_depth"):
-            item_path = os.path.join("./tmp/cropped_depth", item)
-            try:
-                os.remove(item_path)  # Remove files and links
-                print(f"Deleted {item_path}")
-            except Exception as e:
-                print(f"Failed to delete {item_path}. Reason: {e}")
 
-    plt.savefig(f"./tmp/cropped_depth/{str(index)}.png")
+
+    plt.savefig(f"./tmp/cropped_depth/{str(index)}_original.png")    
     
     d_ref=image[int((y2-y1)/2+y1), int((x2-x1)/2+x1)]
 
