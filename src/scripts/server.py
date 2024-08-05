@@ -102,39 +102,40 @@ class UserInputManagerServer(object):
                     print(f"Deleted {item_path}")
                 except Exception as e:
                     print(f"Failed to delete {item_path}. Reason: {e}")
-
+        x1,x2,y1,y2=None,None,None,None
         for i in range(len(rgbd_set.request[owl_keyword[0]])):
             print(i)
-            start_time=time()
-            if len(rgbd_set.request[owl_keyword[0]][i]["boxes"])==0:
-                print(f"no bounding box in frame {i}")
-                continue
-            selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
-            caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
- 
-            response=caller.call()
-            print(f"gpt response is {response}")
-            response=extract_number_from_brackets(response)
-            
-            
-            print("time for gpt call is: ", time()-start_time)
-            #response=0
-            print(f"gpt selected bounding box is {response}")
-            if int(response)==-1:
-                print(f"target not found in frame {i}")
-                continue
+            if x1==None:
+                start_time=time()
+                if len(rgbd_set.request[owl_keyword[0]][i]["boxes"])==0:
+                    print(f"no bounding box in frame {i}")
+                    continue
+                selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
+                caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
+    
+                response=caller.call()
+                print(f"gpt response is {response}")
+                response=extract_number_from_brackets(response)
+                
+                
+                print("time for gpt call is: ", time()-start_time)
+                #response=0
+                print(f"gpt selected bounding box is {response}")
+                if int(response)==-1:
+                    print(f"target not found in frame {i}")
+                    continue
 
-            try:
-                x1, y1, x2, y2 = tuple(rgbd_set.request[owl_keyword[0]][i]["boxes"][int(response)])
-            except:
-                print(f"gpt error in frame {i}")
-                continue
-            x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-            # Cap the x2 and y2 values at the image's width and height
-            x1 = max(x1, 0)
-            y1 = max(y1, 0)
-            x2 = min(x2, rgbd_set.data[i][0].width)
-            y2 = min(y2, rgbd_set.data[i][0].height)
+                try:
+                    x1, y1, x2, y2 = tuple(rgbd_set.request[owl_keyword[0]][i]["boxes"][int(response)])
+                except:
+                    print(f"gpt error in frame {i}")
+                    continue
+                x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
+                # Cap the x2 and y2 values at the image's width and height
+                x1 = max(x1, 0)
+                y1 = max(y1, 0)
+                x2 = min(x2, rgbd_set.data[i][0].width)
+                y2 = min(y2, rgbd_set.data[i][0].height)
             cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
             print(f"cropped image size is {cropped_image.size}") 
             #get segmentation mask

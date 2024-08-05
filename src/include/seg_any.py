@@ -58,8 +58,13 @@ class SegAny:
     
     def get_mask(self):
         if self.model=="default":
-            self.input_point = np.array([[self.image.shape[1] // 2, self.image.shape[0] // 2]])
-            self.input_label = np.array([1])
+            #self.input_point = np.array([[self.image.shape[1] // 2, self.image.shape[0] // 2]])
+            
+            self.input_point = np.array([
+                [0, 0],
+                [self.image.shape[1]-1, self.image.shape[0]-1]
+            ])            
+            self.input_label = np.array([2,3])
             self.masks, self.scores, self.logit = self.predictor.predict(
                 point_coords=self.input_point,
                 point_labels=self.input_label,
@@ -72,11 +77,10 @@ class SegAny:
         elif self.model=="nano":
             self.bbox = [0, 0, 850, 759]
             points = np.array([
-                [self.bbox[0], self.bbox[1]],
-                [self.image.width-1, self.image.height-1]
+                [self.image.width//2, self.image.height//2],
             ])
 
-            point_labels = np.array([2,3])
+            point_labels = np.array([1])
             #print("before predict")  
             mask, _, _ = self.predictor.predict(points, point_labels)
             #print("after predict")
