@@ -6,6 +6,7 @@ from cv_bridge import CvBridge
 import numpy as np
 import os
 from sensor_msgs.msg import Image,CameraInfo
+from geometry_msgs.msg import PoseStamped, Pose
 from guide_dog.msg import ObjectDetectorAction, ObjDetectorFeedback, ObjDetectorResult  # Update with your actual action package and message names
 from std_srvs.srv import Empty, EmptyResponse  # Import the Empty service type and its response
 import torch
@@ -26,7 +27,7 @@ sys.path.append(include_dir)  # Add 'include' directory to sys.path
 from user_input_manager import UserInputManager, UserInput, UserAudio, UserVideo, UserRGBDSet
 from gpt_caller import GPTCaller
 from seg_any import SegAny
-from depth_to_3d import get3d
+from depth_to_3d import get3d,MapBridge
 from utils import extract_number_from_brackets
 
 class UserInputManagerServer(object):
@@ -35,7 +36,8 @@ class UserInputManagerServer(object):
         self.action_server.start()
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
-
+        self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
+        self.map_bridge=MapBridge()
         
         self.manager=UserInputManager(model="nano")
         print("UserInputManager Initialized")
@@ -93,7 +95,7 @@ class UserInputManagerServer(object):
         system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in bounding boxes with a number on the top left corner. Pick the bounding box that contains requested item by anwsering the number. reason about each bounding box on why or why not it is selected, then return your selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
 
-        stacked_world_points=[]
+        stacked_rel_points=[]
         if os.path.exists("./tmp/cropped_depth"):
             for item in os.listdir("./tmp/cropped_depth"):
                 item_path = os.path.join("./tmp/cropped_depth", item)
@@ -151,51 +153,90 @@ class UserInputManagerServer(object):
             image=rgbd_set.data[i][1]
 
             sum_check=np.sum(image[y1:y2,x1:x2], axis=(0, 1))
-            world_points=get3d(image,(x1,y1,x2,y2),info,i)
-            masked_world_points=mask[:,:,np.newaxis]*world_points
-            sum_result=np.sum(masked_world_points, axis=(0, 1))
+            rel_points=get3d(image,(x1,y1,x2,y2),info,i)
+            masked_rel_points=mask[:,:,np.newaxis]*rel_points
+            sum_result=np.sum(masked_rel_points, axis=(0, 1))
             world_point_mean=sum_result/number_of_true
             print(f"the {owl_keyword} is at {world_point_mean}")
-            stacked_world_points.append(world_point_mean)
-            #combine with the dog's pose to get world coordinante
+            stacked_rel_points.append(world_point_mean)
             print(f"frame {i} took {time()-start_time} seconds")
-        if len(stacked_world_points)>1:    
-            stacked_world_points=np.array(stacked_world_points)
+            
+        #remove outliers
+    
+        if len(stacked_rel_points)>1:    
+            
+            stacked_rel_points=np.array(stacked_rel_points)
             #remove outliers
             # Calculate Z-scores
-            z_scores = np.abs(stats.zscore(stacked_world_points, axis=0))
+            z_scores = np.abs(stats.zscore(stacked_rel_points, axis=0))
 
             # Set a threshold (e.g., 3) for identifying outliers
             threshold = 2
 
             # Remove outliers
             non_outliers = (z_scores < threshold).all(axis=1)
-            stacked_world_points = stacked_world_points[non_outliers]
+            stacked_rel_points = stacked_rel_points[non_outliers]
 
-
-
-        if len(stacked_world_points)>1:
+        #get clusters and pick top 1 best relative point
+        if len(stacked_rel_points)>1:
             kmeans = KMeans(n_clusters=2)
-            kmeans.fit(stacked_world_points)
+            kmeans.fit(stacked_rel_points)
             labels = kmeans.labels_
 
-            # Step 4: Compute the mean point for each cluster
-            means = np.array([stacked_world_points[labels == i].mean(axis=0) for i in range(2)])
+            means = np.array([stacked_rel_points[labels == i].mean(axis=0) for i in range(2)])
             print(f"more than one point detected")
             for i in range(2):
                 print(f"Number of points in cluster {i}: {np.sum(labels == i)}")
                 print(f"Mean of cluster {i}: {means[i]}")
-        elif len(stacked_world_points)==1:
-            print(f"one point detected: {stacked_world_points[0]}")
+                
+            if np.linalg.norm(means[0] - means[1]) > 0.3:
+                if np.sum(labels == 0) > np.sum(labels == 1):
+                    best_rel_point=means[0]
+                else:
+                    best_rel_point=means[1]
+            else:
+                best_rel_point=means[0]
+                    
+        elif len(stacked_rel_points)==1:
+            print(f"one point detected: {stacked_rel_points[0]}")
+            best_rel_point=stacked_rel_points[0]
         else:
             print("no point detected")
+            best_rel_point=None
+            
+        if best_rel_point is not None:
+            object_position_in_map=self.map_bridge.get_object_position_in_map(best_rel_point[0],best_rel_point[1],best_rel_point[2],1)
+            print(f"best point is {object_position_in_map}")
+
+            self.map_bridge.publish_markers([object_position_in_map])
+            pose=PoseStamped()
+            pose.header.frame_id = "camera_init"
+
+            pose.pose.position.x = object_position_in_map[0]
+            pose.pose.position.y = object_position_in_map[1]
+            pose.pose.position.z = object_position_in_map[2]
+
+            pose.pose.orientation.x = 0
+            pose.pose.orientation.y = 0
+            pose.pose.orientation.z = 0
+            pose.pose.orientation.w = 1
+            pose.header.stamp = rospy.Time.now()
+            for i in range(5):
+                
+                self.goal_pub.publish(pose)
+            result.success = True
+            result.message = "Completed"
+            
+        else:
+            result.success = False
+            result.message = "No object detected"
+            
+        
 
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
         #print("finish",torch.cuda.mem_get_info())
 
-        result.success = True
-        result.message = "Completed"
         self.action_server.set_succeeded(result)
     
 if __name__ == '__main__':
