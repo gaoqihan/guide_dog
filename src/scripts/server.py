@@ -32,7 +32,7 @@ from utils import extract_number_from_brackets
 
 class UserInputManagerServer(object):
     def __init__(self):
-        self.action_server = actionlib.SimpleActionServer('visual_locator_action', ObjectDetectorAction, self.execute, False)
+        self.action_server = actionlib.SimpleActionServer('visual_locator_action', ObjectDetectorAction, self.object_finder, False)
         self.action_server.start()
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
@@ -46,20 +46,27 @@ class UserInputManagerServer(object):
     def get_info(self,data):
         global info
         info = data
-    def execute(self, goal):
+        
+    def condition_checker(self,prompt):
+        caller=GPTCaller()
+        
+
+        
+    
+    def object_finder(self, goal):
         print(goal.type)
         if goal.type=="audio":
             audio_input=UserAudio(goal.file_path)
             self.manager.add_new_input(audio_input)
             goal_text=self.manager.transcribe_audio(audio_input.id)
             self.task=goal_text
-            self.excute_text()
+            self.object_finder_text()
         elif goal.type=="text":
             self.task=goal.task
-            self.excute_text()
+            self.object_finder_text()
         
         
-    def excute_text(self):
+    def object_finder_text(self):
         print(self.task)
         #rospy.loginfo("Video capture request received, processing...")
         feedback = ObjDetectorFeedback()

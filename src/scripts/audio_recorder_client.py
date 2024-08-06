@@ -2,7 +2,7 @@
 
 import rospy
 from std_srvs.srv import Trigger, TriggerRequest
-
+import subprocess
 def call_service():
     # Initialize the ROS node
     rospy.init_node('trigger_client', anonymous=True)
@@ -20,6 +20,11 @@ def call_service():
         # Call the service to start recording
         rospy.loginfo("Calling service to start recording...")
         response = service_proxy(request)
+        if response.message=="Recording stopped and guide_dog_detector.py executed":
+            subprocess.run(["cp", "/world/recording.wav", "/root/catkin_ws/src/guide_dog/src/tmp/recording.wav"])
+            print("copied")
+            detector_command = ['/usr/bin/python3', '/root/catkin_ws/src/guide_dog/src/scripts/guide_dog_detector.py']
+            subprocess.run(detector_command)
         rospy.loginfo(f"Service response: {response.message}")
         
     except rospy.ServiceException as e:

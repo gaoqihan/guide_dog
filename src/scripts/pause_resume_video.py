@@ -9,6 +9,8 @@ def pause_video_capture():
         pause_service = rospy.ServiceProxy('pause_video_capture', Empty)
         pause_service()
         print("Video capture paused successfully.")
+        
+        
     except rospy.ServiceException as e:
         print(f"Service call failed: {e}")
 

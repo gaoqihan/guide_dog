@@ -36,7 +36,7 @@ class ObstacleNotificationServer(object):
             system_prompt = file.read()
         
         self.caller.create_prompt(system_prompt_list=[system_prompt],user_prompt_list=[image])
-        response=self.caller.call_gpt()
+        response=self.caller.call()
         
         match = re.search(r'\{.*?\}', response)
         if match:
@@ -44,6 +44,7 @@ class ObstacleNotificationServer(object):
             response_dict = json.loads(json_str)
             rospy.loginfo(f"Extracted dictionary: {response_dict}")
         else:
+            print(response)
             rospy.logwarn("No JSON object found in the response")
 
         print(response_dict)
@@ -55,8 +56,6 @@ class ObstacleNotificationServer(object):
         # Publish feedback
         self.action_server.publish_feedback(feedback)
 
-        # Simulate some processing
-        rospy.sleep(2)
 
         # Set the action as succeeded
         self.action_server.set_succeeded(result)

@@ -1,0 +1,32 @@
+Your task is to check the condition in the provided text and supplement prompt is True or False. First reason about your thought process in around 100 words, be concise, then provide the answer in True or False. your response should be in JSON format:
+
+{
+    "reason": "#your thought process leading to the answer",
+    "anwser":"#True or False"
+
+}
+
+Examples:
+
+1. prompt: Elevator door is open.
+supplement prompt: [path to an closed elevator door]
+
+answer:{
+    "reason": "from the photo, the elevator door is closed, the anwser should be False",
+    "answer": "False"
+}
+
+2. prompt: the user is sitting on the chair.
+supplement prompt: [path to user sitting on the chair]
+
+answer:{
+    "reason": "from the photo, there is a chair in front of me, the user is sitting on it, the anwser should be True",
+    "answer": "True"
+}
+
+3. prompt: we are at the traffic crossing.
+supplement prompt: distace to traffic crossing: 15 meters
+answer:{
+    "reason": "15 meters is too far for waiting at traffic crossing, therefore we are not at the traffic light yet, the anwser should be False",
+    "answer": "False"
+}

@@ -9,16 +9,11 @@ process = None
 
 def callback(req):
     global recording, process
-    if not recording:
-        # Ensure the tmp directory exists
-        if not os.path.exists('./tmp'):
-            os.makedirs('./tmp')
-        
-        # Define the path for the output file
-        output_file = './tmp/recording.wav'
-        
+    output_file = '/mnt/T7/world_volume/recording.wav'
+
+    if not recording:        
         # Command to record audio using audio_capture
-        command = ['arecord', '-D', 'plughw:1,0', '-f', 'cd', '-t', 'wav', '-r', '44100', '-c', '1', output_file]
+        command = ['arecord', '-f', 'cd', '-t', 'wav', '-r', '44100', '-c', '1', output_file]
         
         # Start recording
         rospy.loginfo("Recording started...")

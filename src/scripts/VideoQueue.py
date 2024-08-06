@@ -28,7 +28,11 @@ class VideoQueue(object):
         self.color_image = self.bridge.imgmsg_to_cv2(data, desired_encoding='bgr8')
 
     def depth_callback(self, data):
+        
         if self.pause:
+            if time()-self.pause_start>20:
+                print("Resuming after 20 sec timeout")
+                self.pause=False
             return
 
         rate = rospy.Rate(30)  # 1 fps
@@ -59,6 +63,7 @@ class VideoQueue(object):
         rate.sleep()
     
     def pause_callback(self, req):
+        self.pause_start=time()
         self.pause = True
         return EmptyResponse()
 
