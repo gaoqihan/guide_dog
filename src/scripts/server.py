@@ -99,7 +99,11 @@ class UserInputManagerServer(object):
         #get bounding boxes through owl
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
-        system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in bounding boxes with a number on the top left corner. Pick the bounding box that contains requested item by anwsering the number. reason about each bounding box on why or why not it is selected, then return your selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
+        system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in at most three \
+            bounding boxes with different color. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
+                Pick the bounding box that contains requested item by anwsering the index number. reason about each bounding box on why or why not it is selected, \
+                    describe the location of the bounding box in the picture, the color of the bounding box and the index of the bounding box, then return your \
+                        selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
 
         stacked_rel_points=[]
@@ -121,7 +125,8 @@ class UserInputManagerServer(object):
                     continue
                 selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
                 caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
-    
+                type(rgbd_set.request[owl_keyword[0]][i]["image"])
+                rgbd_set.request[owl_keyword[0]][i]["image"].show()
                 response=caller.call()
                 print(f"gpt response is {response}")
                 response=extract_number_from_brackets(response)

@@ -119,6 +119,6 @@ class Detector:
 
             #copied_image.show()
         elif self.model_type=="nano":
-            copied_image = draw_owl_output(image, results, text=text, draw_text=True)
+            copied_image = draw_owl_output(image, results, text=text, draw_text=False)
             #copied_image.show()
             return copied_image
