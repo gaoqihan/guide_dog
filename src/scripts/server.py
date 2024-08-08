@@ -101,8 +101,8 @@ class UserInputManagerServer(object):
         #choose the bounding box through gpt
         system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in at most three \
             bounding boxes with different color. You wqill be provided with a whole image containing bounding boxes, and cropped images corresponding to the bounding boxes. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
-                Pick the bounding box that contains requested item by anwsering the index number. reason about each bounding box on why or why not it is selected, \
-                    describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box, then return your \
+                Pick the bounding box that contains requested item by anwsering the index number. Do not provide any reason about each bounding box on why or why not it is selected, \
+                    describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box.ONLY return your \
                         selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
         prompt_image=[]
@@ -139,6 +139,10 @@ class UserInputManagerServer(object):
                     print(f"no bounding box in frame {i}")
                     continue
                 selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
+                user_prompt_list=[user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]]
+                for j in range(len(prompt_image[i])):
+                    user_prompt_list.append(f"{j}: ")
+                    user_prompt_list.append(prompt_image[i][j])
                 caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"],"0:",prompt_image[i][0],"1: ",prompt_image[i][1],"2: ",prompt_image[i][2]],system_prompt_list=[system_prompt])
                 type(rgbd_set.request[owl_keyword[0]][i]["image"])
                 print(rgbd_set.request[owl_keyword[0]][i]["image"].size)
