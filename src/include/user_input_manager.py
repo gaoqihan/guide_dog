@@ -89,7 +89,7 @@ class UserInputManager:
         # Save each frame as an image file
         for i, frame in enumerate(downsampled_video.iter_frames()):
             img = Image.fromarray(frame)
-            img = img.resize((640, 480))
+            #img = img.resize((640, 480))
             image_list.append(img)        
         video_input.data = image_list
         return video_input.data
@@ -168,5 +168,5 @@ class UserRGBDSet(UserInput):
             depth = np.load(os.path.join(depth_path, depth_filename))
 
             # Add the pair to the list
-            self.data.append((image, depth))       
+            self.data.append((image, depth))  
         

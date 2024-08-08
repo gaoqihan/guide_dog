@@ -18,9 +18,10 @@ def visual_locator_client():
 
     # Creates a goal to send to the action server
     goal = ObjectDetectorGoal()
-    #goal.task="find the closest place for me to sit down"
-    goal.type="audio"
-    goal.file_path="/root/catkin_ws/src/guide_dog/src/tmp/recording.wav"
+    goal.task="which chair is empty"
+    #goal.type="audio"
+    #goal.file_path="/root/catkin_ws/src/guide_dog/src/tmp/recording.wav"
+    goal.type="text"
     print("goal created")
     # Sends the goal to the action server, specifying which feedback function to call when feedback received
     client.send_goal(goal, feedback_cb=feedback_cb)

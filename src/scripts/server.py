@@ -100,12 +100,27 @@ class UserInputManagerServer(object):
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
         system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in at most three \
-            bounding boxes with different color. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
+            bounding boxes with different color. You wqill be provided with a whole image containing bounding boxes, and cropped images corresponding to the bounding boxes. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
                 Pick the bounding box that contains requested item by anwsering the index number. reason about each bounding box on why or why not it is selected, \
-                    describe the location of the bounding box in the picture, the color of the bounding box and the index of the bounding box, then return your \
+                    describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box, then return your \
                         selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
-
+        prompt_image=[]
+        for i in range(len(rgbd_set.request[owl_keyword[0]])):
+            cropped_image_list=[]
+            for bbox in rgbd_set.request[owl_keyword[0]][i]["boxes"]:
+                x1, y1, x2, y2 = tuple(bbox)
+                x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
+                # Cap the x2 and y2 values at the image's width and height
+                x1 = max(x1, 0)
+                y1 = max(y1, 0)
+                x2 = min(x2, rgbd_set.data[i][0].width)
+                y2 = min(y2, rgbd_set.data[i][0].height)
+                cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
+                print(f"cropped image size is {cropped_image.size}") 
+                cropped_image_list.append(cropped_image)
+            prompt_image.append(cropped_image_list)
+        
         stacked_rel_points=[]
         if os.path.exists("./tmp/cropped_depth"):
             for item in os.listdir("./tmp/cropped_depth"):
@@ -124,9 +139,9 @@ class UserInputManagerServer(object):
                     print(f"no bounding box in frame {i}")
                     continue
                 selection_range="choose from following numbers"+str(range(len(rgbd_set.request[owl_keyword[0]][i]["boxes"])))
-                caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"]],system_prompt_list=[system_prompt])
+                caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"],"0:",prompt_image[i][0],"1: ",prompt_image[i][1],"2: ",prompt_image[i][2]],system_prompt_list=[system_prompt])
                 type(rgbd_set.request[owl_keyword[0]][i]["image"])
-                rgbd_set.request[owl_keyword[0]][i]["image"].show()
+                print(rgbd_set.request[owl_keyword[0]][i]["image"].size)
                 response=caller.call()
                 print(f"gpt response is {response}")
                 response=extract_number_from_brackets(response)
@@ -152,6 +167,7 @@ class UserInputManagerServer(object):
                 y2 = min(y2, rgbd_set.data[i][0].height)
             cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
             print(f"cropped image size is {cropped_image.size}") 
+            continue
             #get segmentation mask
             self.seg_any.encode(cropped_image)
 

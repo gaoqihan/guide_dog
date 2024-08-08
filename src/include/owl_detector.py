@@ -7,6 +7,7 @@ import subprocess
 import torch
 from nanoowl.owl_predictor import OwlPredictor
 from nanoowl.owl_drawing import draw_owl_output
+import os
 
 class Detector:
     """Class that implements Owl v2 for object detection."""
@@ -86,6 +87,9 @@ class Detector:
 
     
     def displayBoundingBox(self,image,results,text):
+        # Ensure the directory exists
+        output_dir = './tmp/bbox'
+        os.makedirs(output_dir, exist_ok=True)
         if self.model_type=="default":
 
             # Retrieve predictions for the first image.
@@ -119,6 +123,10 @@ class Detector:
 
             #copied_image.show()
         elif self.model_type=="nano":
-            copied_image = draw_owl_output(image, results, text=text, draw_text=False)
-            #copied_image.show()
+            copied_image = draw_owl_output(image, results, text=text, draw_text=True)
+            #copied_image.show()``
+            output_path = os.path.join(output_dir, 'bbox_image.png')
+
+            copied_image.save(output_path)
+
             return copied_image
