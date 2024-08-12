@@ -143,7 +143,7 @@ class UserInputManagerServer(object):
                 for j in range(len(prompt_image[i])):
                     user_prompt_list.append(f"{j}: ")
                     user_prompt_list.append(prompt_image[i][j])
-                caller.create_prompt([user_prompt,selection_range,rgbd_set.request[owl_keyword[0]][i]["image"],"0:",prompt_image[i][0],"1: ",prompt_image[i][1],"2: ",prompt_image[i][2]],system_prompt_list=[system_prompt])
+                caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt])
                 type(rgbd_set.request[owl_keyword[0]][i]["image"])
                 print(rgbd_set.request[owl_keyword[0]][i]["image"].size)
                 response=caller.call()

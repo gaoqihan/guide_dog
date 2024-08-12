@@ -18,7 +18,7 @@ def visual_locator_client():
 
     # Creates a goal to send to the action server
     goal = ObjectDetectorGoal()
-    goal.task="which chair is empty"
+    goal.task="find the empty chair"
     #goal.type="audio"
     #goal.file_path="/root/catkin_ws/src/guide_dog/src/tmp/recording.wav"
     goal.type="text"
