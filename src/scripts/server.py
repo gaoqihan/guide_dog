@@ -16,6 +16,7 @@ from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskG
 from scipy import stats
 import json
 from time import time
+from std_msgs.msg import Float32
 
 
 # Add the '../include' directory to sys.path to import modules from there
@@ -37,6 +38,8 @@ class UserInputManagerServer(object):
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
+        self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
+
         self.map_bridge=MapBridge()
         
         self.manager=UserInputManager(model="nano")
@@ -100,9 +103,9 @@ class UserInputManagerServer(object):
         self.manager.detect_objects(rgbd_set.id,owl_keyword)
         #choose the bounding box through gpt
         system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in at most three \
-            bounding boxes with different color. You wqill be provided with a whole image containing bounding boxes, and cropped images corresponding to the bounding boxes. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
-                Pick the bounding box that contains requested item by anwsering the index number. Do not provide any reason about each bounding box on why or why not it is selected, \
-                    describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box.ONLY return your \
+            bounding boxes with different color. You will be provided with a whole image containing bounding boxes, and cropped images corresponding to the bounding boxes. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
+                Pick the bounding box that contains requested item by anwsering the index number. reason about each bounding box on why or why not it is selected, \
+                    describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box, then you MUST give a confidence score for picking this bounding box range from 0 to 10 (0 being lowest). return your \
                         selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         user_prompt=f"Task is : {gpt_keyword}"
         prompt_image=[]
@@ -171,7 +174,7 @@ class UserInputManagerServer(object):
                 y2 = min(y2, rgbd_set.data[i][0].height)
             cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
             print(f"cropped image size is {cropped_image.size}") 
-            continue
+            
             #get segmentation mask
             self.seg_any.encode(cropped_image)
 
@@ -237,8 +240,11 @@ class UserInputManagerServer(object):
             best_rel_point=None
             
         if best_rel_point is not None:
+            self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
+            return
             object_position_in_map=self.map_bridge.get_object_position_in_map(best_rel_point[0],best_rel_point[1],best_rel_point[2],1)
             print(f"best point is {object_position_in_map}")
+            
 
             self.map_bridge.publish_markers([object_position_in_map])
             pose=PoseStamped()
@@ -260,6 +266,8 @@ class UserInputManagerServer(object):
             result.message = "Completed"
             
         else:
+            self.rel_pos_publisher.publish(int(-1))
+
             result.success = False
             result.message = "No object detected"
             

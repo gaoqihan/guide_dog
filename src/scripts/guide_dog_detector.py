@@ -1,14 +1,14 @@
 import rospy
 import actionlib
 from guide_dog.msg import ObjectDetectorAction, ObjectDetectorGoal
+from std_msgs.msg import String
 import sys
 
 def feedback_cb(feedback):
     print(f"Progress: {feedback.progress}")
 
-def visual_locator_client():
+def callback(msg):
     # Initializes the action client node
-    rospy.init_node('visual_locator_client')
 
     # Creates the client, specifying the action type
     client = actionlib.SimpleActionClient('visual_locator_action', ObjectDetectorAction)
@@ -18,7 +18,8 @@ def visual_locator_client():
 
     # Creates a goal to send to the action server
     goal = ObjectDetectorGoal()
-    goal.task="find the empty chair"
+    #goal.task="find washroom sign"
+    goal.task=msg.data
     #goal.type="audio"
     #goal.file_path="/root/catkin_ws/src/guide_dog/src/tmp/recording.wav"
     goal.type="text"
@@ -31,11 +32,11 @@ def visual_locator_client():
     client.wait_for_result()
     
     # Prints out the result of executing the action
-    return client.get_result()  # A VideoCaptureResult
+    result= client.get_result()  # A VideoCaptureResult
+    
 
 if __name__ == '__main__':
-    try:
-        result = visual_locator_client()
-        print(f"Result: {result.success}, {result.message}")
-    except rospy.ROSInterruptException:
-        print("Program interrupted before completion", file=sys.stderr)
+    if not rospy.is_shutdown():
+        rospy.init_node('visual_locator_client')
+        subscriber=rospy.Subscriber('/find_object', String,callback)
+        rospy.spin()

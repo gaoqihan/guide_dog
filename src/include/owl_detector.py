@@ -68,7 +68,7 @@ class Detector:
             return results
         elif self.model_type=="nano":
             text_encodings = self.predictor.encode_text(texts)
-            results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.1)
+            results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.05)
             #print(results)
             boxes, scores, labels = results.boxes, results.scores, results.labels
             topk=min(3,scores.size(0))

@@ -16,7 +16,7 @@ class VideoQueue(object):
         self.depth_sub = rospy.Subscriber('/camera/aligned_depth_to_color/image_raw', Image, self.depth_callback)
         self.pause_service = rospy.Service('pause_video_capture', Empty, self.pause_callback)
         self.resume_service = rospy.Service('resume_video_capture', Empty, self.resume_callback)  # Add a service to resume video capture
-        self.window = 10
+        self.window = 1
         self.pause = False  # Initialize the pause attribute
         # Create directories if they don't exist
         self.color_dir = os.path.expanduser('~/catkin_ws/src/guide_dog/src/tmp/color')
