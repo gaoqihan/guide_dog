@@ -68,20 +68,35 @@ class Detector:
             return results
         elif self.model_type=="nano":
             text_encodings = self.predictor.encode_text(texts)
-            results = self.predictor.predict(image=image, text=texts,text_encodings=text_encodings, threshold=0.05)
-            #print(results)
+            results = self.predictor.predict(image=image, text=texts, text_encodings=text_encodings, threshold=0.01)
             boxes, scores, labels = results.boxes, results.scores, results.labels
-            topk=min(3,scores.size(0))
-            # Sort scores in descending order and get the top 3 indices
-            _, top_indices = torch.topk(scores, topk, largest=True, sorted=True)
 
-            # Filter boxes, scores, and labels to keep only the top 3
-            boxes = boxes[top_indices]
-            scores = scores[top_indices]
-            labels = labels[top_indices]
-            results.boxes = boxes
-            results.scores = scores
-            results.labels = labels
+            # Group results by label
+            label_groups = {}
+            for box, score, label in zip(boxes, scores, labels):
+                if label.item() not in label_groups:
+                    label_groups[label.item()] = {'boxes': [], 'scores': [], 'labels': []}
+                label_groups[label.item()]['boxes'].append(box)
+                label_groups[label.item()]['scores'].append(score)
+                label_groups[label.item()]['labels'].append(label)
+            # Filter top 4 for each label
+            filtered_boxes = []
+            filtered_scores = []
+            filtered_labels = []
+            for label, group in label_groups.items():
+                group_scores = torch.tensor(group['scores'])
+                topk = min(4, group_scores.size(0))
+                _, top_indices = torch.topk(group_scores, topk, largest=True, sorted=True)
+                for idx in top_indices:
+                    filtered_boxes.append(group['boxes'][idx])
+                    filtered_scores.append(group['scores'][idx])
+                    filtered_labels.append(group['labels'][idx])
+
+            # Convert lists back to tensors
+            results.boxes = torch.stack(filtered_boxes)
+            results.scores = torch.tensor(filtered_scores)
+            results.labels = torch.tensor(filtered_labels)
+
             return results
 
 
@@ -123,10 +138,77 @@ class Detector:
 
             #copied_image.show()
         elif self.model_type=="nano":
-            copied_image = draw_owl_output(image, results, text=text, draw_text=True)
+            # Draw the bounding boxes on the image
+            #copied_image = draw_owl_output(image, results, text=text, draw_text=True)
             #copied_image.show()``
+            copied_image = annotate(image, results)
             output_path = os.path.join(output_dir, 'bbox_image.png')
 
             copied_image.save(output_path)
-
+            print(type(copied_image))
             return copied_image
+
+import PIL.Image
+import PIL.ImageDraw
+import cv2
+from nanoowl.owl_predictor import OwlDecodeOutput
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import List
+
+def annotate(image, output: OwlDecodeOutput):
+    is_pil = not isinstance(image, np.ndarray)
+    if is_pil:
+        image = np.asarray(image)
+    font = cv2.FONT_HERSHEY_TRIPLEX
+    font_scale = 1
+    num_detections = len(output.labels)
+    #num_detections=min(num_detections,3)
+
+    for i in range(num_detections):
+        box = output.boxes[i]
+        label_index = int(output.labels[i])
+        box = [int(x) for x in box]
+        pt0 = (box[0], box[1])
+        pt1 = (box[2], box[3])
+
+        offset_y = (box[3] - box[1]) // 2
+        offset_x = (box[2] - box[0]) // 2
+        center = (box[0] + offset_x, box[1] + offset_y)
+
+        # Calculate the size of the text box
+        text = str(i)
+        (text_width, text_height), baseline = cv2.getTextSize(
+            text,
+            font,
+            font_scale,
+            2  # thickness
+        )
+
+        # Determine the radius of the circle
+        radius = max(text_width, text_height) // 2 + 10  # Add some padding
+
+        cv2.circle(
+            image,
+            center,
+            radius,
+            (0, 0, 0),  # black color
+            cv2.FILLED
+        )
+        text_x = center[0] - text_width // 2
+        text_y = center[1] + text_height // 2 #- baseline
+
+        # Draw the text on top of the circle
+        cv2.putText(
+            image,
+            str(i),
+            (text_x, text_y),
+            font,
+            font_scale,
+            (255, 255, 255),  # white color for text
+            2,  # thickness
+            cv2.LINE_AA
+        )
+    if is_pil:
+        image = PIL.Image.fromarray(image)
+    return image

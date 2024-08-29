@@ -79,7 +79,7 @@ from geometry_msgs.msg import Point
 
 bridge = CvBridge()
 
-global_frame = "camera_init"
+global_frame = "map"
 
 class MapBridge:
     def __init__(self):

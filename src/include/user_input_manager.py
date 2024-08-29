@@ -93,7 +93,7 @@ class UserInputManager:
             image_list.append(img)        
         video_input.data = image_list
         return video_input.data
-    
+    '''
     def detect_objects(self,id,texts):
         user_input = self.get_input_by_id(id)
         user_input.request[texts[0]] = []
@@ -118,8 +118,9 @@ class UserInputManager:
 
         else:
             raise TypeError("Invalid input type")
-        
-        
+    '''
+    
+
 
 class UserInput:
     def __init__(self):
@@ -149,6 +150,7 @@ class UserRGBDSet(UserInput):
         self.type = "RGBD_set"
         self.image_set_dir = path_to_images
         self.data=[]
+        self.length=0
         color_path = os.path.join(self.image_set_dir,'color')
         depth_path = os.path.join(self.image_set_dir,'depth')
 
@@ -168,5 +170,19 @@ class UserRGBDSet(UserInput):
             depth = np.load(os.path.join(depth_path, depth_filename))
 
             # Add the pair to the list
-            self.data.append((image, depth))  
+            self.data.append((image, depth)) 
+            self.length+=1
+    def detect_objects(self,detector,texts):
+        self.bbox_list_list=[]
+        self.labeled_image_list=[]
+        for image, depth in self.data:
+            results = detector.detect(image, texts)
+            self.bbox_list=results.boxes.tolist()
+            self.labeled_image=detector.displayBoundingBox(image,results,texts)
+            self.bbox_list_list.append(self.bbox_list)
+            self.labeled_image_list.append(self.labeled_image)
+            
+            
+        return self.bbox_list_list,self.labeled_image_list
+
         
