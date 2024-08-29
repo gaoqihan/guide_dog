@@ -19,6 +19,10 @@ from time import time
 from std_msgs.msg import Float32, String
 
 
+    
+import datetime
+from PIL import Image
+
 # Add the '../include' directory to sys.path to import modules from there
 script_dir = os.path.dirname(__file__)  # Get the directory where the script is located
 include_dir = os.path.join(script_dir, '../include')  # Path to the 'include' directory
@@ -79,7 +83,7 @@ class UserInputManagerServer(object):
         rgbd_set=UserRGBDSet("./tmp")
         #self.manager.add_new_input(rgbd_set)
         
-
+        gpt_answer_log=""
         caller=GPTCaller()
 
         #distill the task thruough gpt
@@ -91,6 +95,7 @@ class UserInputManagerServer(object):
         user_prompt=self.task
         caller.create_prompt([user_prompt],system_prompt_list=[system_prompt],response_format=response_format)
         response=caller.call(model="gpt-4o-2024-08-06")
+        gpt_answer_log+=response+"\n"
         result_dict = json.loads(response)
 
         #assume done
@@ -102,7 +107,7 @@ class UserInputManagerServer(object):
         
 
         #get bounding boxes through owl
-        bbox_list_list,labeled_image_list=rgbd_set.detect_objects(self.detector,owl_keyword)
+        bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
         
         #image=Image.open("./tmp/color/0.png")
 
@@ -149,11 +154,11 @@ class UserInputManagerServer(object):
             #    user_prompt_list.append(f"{j}: ")
             #    user_prompt_list.append(prompt_image[i][j])
             caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
-            response=caller.call(model="gpt-4o-2024-08-06")
+            gpt_response=caller.call(model="gpt-4o-2024-08-06")
             print(f"gpt response is {response}")
+            gpt_answer_log+=gpt_response+"\n"
 
-            response = json.loads(response)["final_decision"]  
-
+            response = json.loads(gpt_response)["final_decision"]  
             
             print("time for gpt call is: ", time()-start_time)
             #response=0
@@ -287,10 +292,73 @@ class UserInputManagerServer(object):
 
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
+        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,gpt_answer_log)
+
         #print("finish",torch.cuda.mem_get_info())
 
         #self.action_server.set_succeeded(result)
+        
+import os
+import datetime
+import numpy as np
+from PIL import Image
+
+def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists, gpt_log):
+    # Create a folder with the current time as folder_name
+    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_folder = os.path.join('./log', current_time)
+    os.makedirs(base_folder, exist_ok=True)
     
+    # Create a raw_image folder inside the base_folder
+    raw_image_folder = os.path.join(base_folder, 'raw_image')
+    os.makedirs(raw_image_folder, exist_ok=True)
+    
+    # Iterate over the rgbd_set.data list
+    for idx, (pil_image, npy_array) in enumerate(rgbd_set.data):
+        # Create a separate subfolder for each tuple
+        tuple_folder = os.path.join(raw_image_folder, f'image_{idx}')
+        os.makedirs(tuple_folder, exist_ok=True)
+        
+        # Save the PIL image
+        image_path = os.path.join(tuple_folder, 'image.png')
+        pil_image.save(image_path)
+        
+        # Save the .npy array
+        npy_path = os.path.join(tuple_folder, 'data.npy')
+        np.save(npy_path, npy_array)
+    
+    # Create a labeled_image folder inside the base_folder
+    labeled_image_folder = os.path.join(base_folder, 'labeled_image')
+    os.makedirs(labeled_image_folder, exist_ok=True)
+    
+    # Save each PIL image in labeled_image_list
+    for idx, pil_image in enumerate(labeled_image_list):
+        image_path = os.path.join(labeled_image_folder, f'labeled_image_{idx}.png')
+        pil_image.save(image_path)
+    
+    # Create an alter_labeled_image folder inside the base_folder
+    alter_labeled_image_folder = os.path.join(base_folder, 'alter_labeled_image')
+    os.makedirs(alter_labeled_image_folder, exist_ok=True)
+    
+    # Save each PIL image in alter_labeled_image_lists
+    for idx, pil_image in enumerate(alter_labeled_image_lists):
+        image_path = os.path.join(alter_labeled_image_folder, f'alter_labeled_image_{idx}.png')
+        pil_image.save(image_path)
+    
+    # Save bbox_list_list as a text file
+    bbox_list_path = os.path.join(base_folder, 'bbox_list.txt')
+    with open(bbox_list_path, 'w') as f:
+        for bbox_list in bbox_list_list:
+            f.write(f"{bbox_list}\n")
+    
+    # Save gpt_log as a text file
+    gpt_log_path = os.path.join(base_folder, 'gpt_log.txt')
+    with open(gpt_log_path, 'w') as f:
+        f.write(gpt_log)
+    
+    print(f"Data saved in {base_folder}")
+
+
 if __name__ == '__main__':
     rospy.init_node('detector_server')
     server = UserInputManagerServer()

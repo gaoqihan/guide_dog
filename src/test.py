@@ -84,7 +84,7 @@ if __name__ == '__main__':
         rospy.sleep(1)
 
         print("Publisher initialized")
-        message = "find my jacket, it is on a chair"
+        message = "find the black box that says kinova"
         pub.publish(message)
         print(f"Message published: {message}")
 

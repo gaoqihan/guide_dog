@@ -101,7 +101,7 @@ class Detector:
 
 
     
-    def displayBoundingBox(self,image,results,text):
+    def displayBoundingBox(self,image,results,text,mode="small"):
         # Ensure the directory exists
         output_dir = './tmp/bbox'
         os.makedirs(output_dir, exist_ok=True)
@@ -141,7 +141,17 @@ class Detector:
             # Draw the bounding boxes on the image
             #copied_image = draw_owl_output(image, results, text=text, draw_text=True)
             #copied_image.show()``
-            copied_image = annotate(image, results)
+            if mode=="small":
+                copied_image = annotate(image, results, size=0.5)
+            elif mode=="mid":
+                copied_image = annotate(image, results,size=1)
+            elif mode=="large":
+                copied_image = annotate(image, results,size=2)
+            elif mode=="bbox":
+                copied_image = draw_owl_output(image, results, text=text, draw_text=False)
+            else:
+                copied_image = annotate(image, results,size=1)
+
             output_path = os.path.join(output_dir, 'bbox_image.png')
 
             copied_image.save(output_path)
@@ -156,12 +166,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
 
-def annotate(image, output: OwlDecodeOutput):
+def annotate(image, output: OwlDecodeOutput,size=1):
     is_pil = not isinstance(image, np.ndarray)
     if is_pil:
         image = np.asarray(image)
     font = cv2.FONT_HERSHEY_TRIPLEX
-    font_scale = 1
+    font_scale = size
     num_detections = len(output.labels)
     #num_detections=min(num_detections,3)
 

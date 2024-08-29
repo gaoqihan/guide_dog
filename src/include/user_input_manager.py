@@ -175,14 +175,17 @@ class UserRGBDSet(UserInput):
     def detect_objects(self,detector,texts):
         self.bbox_list_list=[]
         self.labeled_image_list=[]
+        alt_labeled_image_list=[]
         for image, depth in self.data:
             results = detector.detect(image, texts)
             self.bbox_list=results.boxes.tolist()
-            self.labeled_image=detector.displayBoundingBox(image,results,texts)
+            self.labeled_image=detector.displayBoundingBox(image,results,texts,mode="mid")
+            alt_labeled_image=[detector.displayBoundingBox(image,results,texts,mode="bbox"),detector.displayBoundingBox(image,results,texts,mode="small"),detector.displayBoundingBox(image,results,texts,mode="mid"),detector.displayBoundingBox(image,results,texts,mode="large")]
             self.bbox_list_list.append(self.bbox_list)
             self.labeled_image_list.append(self.labeled_image)
+            alt_labeled_image_list+=alt_labeled_image
             
             
-        return self.bbox_list_list,self.labeled_image_list
+        return self.bbox_list_list,self.labeled_image_list,alt_labeled_image_list
 
         
