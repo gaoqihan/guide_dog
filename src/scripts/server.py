@@ -17,6 +17,11 @@ from scipy import stats
 import json
 from time import time
 from std_msgs.msg import Float32, String
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 
     
@@ -266,9 +271,11 @@ class UserInputManagerServer(object):
                     print(f"target not found in frame {i} with point grid")   
             
         if best_rel_point is not None:
+            best_rel_point[2]=best_rel_point[2]
+            print(best_rel_point)
             self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
             
-            '''
+            
             object_position_in_map=self.map_bridge.get_object_position_in_map(best_rel_point[0],best_rel_point[1],best_rel_point[2],1)
             print(f"best point is {object_position_in_map}")
             
@@ -290,9 +297,9 @@ class UserInputManagerServer(object):
                 
                 self.goal_pub.publish(pose)
             print("Done publishing goal")
-            result.success = True
-            result.message = "Completed"
-            '''
+            #result.success = True
+            #result.message = "Completed"
+            
         
         else:
             self.rel_pos_publisher.publish(int(-1))

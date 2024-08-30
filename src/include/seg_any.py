@@ -77,7 +77,7 @@ class SegAny:
         elif self.model=="nano":
             self.bbox = [0, 0, 850, 759]
             points = np.array([
-                [self.image.width//2, self.image.height//2],
+                [self.image.width//2, self.image.height//4*3],
             ])
 
             point_labels = np.array([1])
