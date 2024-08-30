@@ -4,11 +4,12 @@ import random
 
 from moviepy.editor import VideoFileClip
 import os
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import sys
 import rospy
-import torch
+#import torch
+import cv2
 # Add the '../include' directory to sys.path to import modules from there
 script_dir = os.path.dirname(__file__)  # Get the directory where the script is located
 include_dir = os.path.join(script_dir, '../include')  # Path to the 'include' directory
@@ -180,12 +181,66 @@ class UserRGBDSet(UserInput):
             results = detector.detect(image, texts)
             self.bbox_list=results.boxes.tolist()
             self.labeled_image=detector.displayBoundingBox(image,results,texts,mode="mid")
-            alt_labeled_image=[detector.displayBoundingBox(image,results,texts,mode="bbox"),detector.displayBoundingBox(image,results,texts,mode="small"),detector.displayBoundingBox(image,results,texts,mode="mid"),detector.displayBoundingBox(image,results,texts,mode="large")]
+            alt_labeled_image=[detector.displayBoundingBox(image,results,texts,mode="bbox"),
+                               detector.displayBoundingBox(image,results,texts,mode="small"),
+                               detector.displayBoundingBox(image,results,texts,mode="mid"),
+                               detector.displayBoundingBox(image,results,texts,mode="large")]
             self.bbox_list_list.append(self.bbox_list)
             self.labeled_image_list.append(self.labeled_image)
             alt_labeled_image_list+=alt_labeled_image
             
             
         return self.bbox_list_list,self.labeled_image_list,alt_labeled_image_list
+    
 
+    def point_grid_label(self, points_num=32):
+        is_pil = not isinstance(self.data[0][0], np.ndarray)
+
+        point_labeled_image_list = []
+        points_coord_list = []
         
+        # Determine the number of rows and columns for the grid
+        grid_size = int(points_num ** 0.5)
+        
+        for image, _ in self.data:
+            if is_pil:
+                image = np.asarray(image)
+            height, width, _ = image.shape
+            
+            # Load a larger font
+            font_scale = 0.5  # Adjust this value as needed
+            font_thickness = 1  # Adjust this value as needed
+            font = cv2.FONT_HERSHEY_TRIPLEX
+            
+            # Calculate coordinates for grid points
+            for i in range(grid_size):
+                for j in range(grid_size):
+                    x = int((j + 0.5) * width / grid_size)
+                    y = int((i + 0.5) * height / grid_size)
+                    points_coord_list.append((x, y))
+                    text = str(i * grid_size + j + 1)
+
+                    (text_width, text_height), baseline = cv2.getTextSize(
+                        text,
+                        font,
+                        font_scale,
+                        2  # thickness
+                    )
+
+                    # Draw a solid black circle
+                    radius = max(text_width, text_height) //2  # Add some padding
+                    cv2.circle(image, (x, y), radius, (0, 0, 0), -1)
+                    
+                    # Calculate text size and position to center it
+                    text = str(i * grid_size + j + 1)
+                    text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+                    text_x = x - text_size[0] // 2
+                    text_y = y + text_size[1] // 2
+                    
+                    # Draw the number in white
+                    cv2.putText(image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+            if is_pil:
+                image = Image.fromarray(image)
+            point_labeled_image_list.append(image)
+        
+        return point_labeled_image_list,points_coord_list

@@ -32,7 +32,7 @@ sys.path.append(include_dir)  # Add 'include' directory to sys.path
 from user_input_manager import UserInputManager, UserInput, UserAudio, UserVideo, UserRGBDSet
 from gpt_caller import GPTCaller
 from seg_any import SegAny
-from depth_to_3d import get3d,MapBridge
+from depth_to_3d import get3d_bbox,get3d_point,MapBridge
 from utils import extract_number_from_brackets
 from owl_detector import Detector
 
@@ -81,10 +81,16 @@ class UserInputManagerServer(object):
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'p'])  # Use sys.executable
         #create RGBDSet input
         rgbd_set=UserRGBDSet("./tmp")
-        #self.manager.add_new_input(rgbd_set)
         
         gpt_answer_log=""
+        bbox_list_list=[]
+        labeled_image_list=[]
+        alter_labeled_image_lists=[]
+        point_grid_image_list=[]
+        x1,x2,y1,y2=None,None,None,None
+
         caller=GPTCaller()
+
 
         #distill the task thruough gpt
 
@@ -106,6 +112,36 @@ class UserInputManagerServer(object):
         print(owl_keyword,gpt_keyword)
         
 
+
+        if x1 is None:
+            
+            #self.manager.add_new_input(rgbd_set)
+            os.makedirs("./tmp/point_grid", exist_ok=True)
+
+            point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
+            with open('./prompts/visual_selector/point_grid', 'r') as file:
+                prompt_json = json.loads(file.read())
+            system_prompt=prompt_json["system_prompt"]
+            response_format=prompt_json["response_format"]
+            user_prompt=gpt_keyword
+            for i in range(len(point_grid_image_list)):
+                image=point_grid_image_list[i]
+                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                response=caller.call(model="gpt-4o-2024-08-06")
+                gpt_answer_log+=response+"\n"
+                print(f"gpt response is {response}")
+                result_dict = json.loads(response)
+                if result_dict["final_decision"]!="-1":
+                    best_pixel=points_coord_list[int(result_dict["final_decision"])]
+                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                    break
+                else:
+                    print(f"target not found in frame {i} with point grid")   
+
+
+
+
+
         #get bounding boxes through owl
         bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
         
@@ -124,10 +160,9 @@ class UserInputManagerServer(object):
         system_prompt=prompt_json["system_prompt"]
         response_format=prompt_json["response_format"]
         user_prompt=f"Task is : {gpt_keyword}"
-        prompt_image=[]
 
         
-        stacked_rel_points=[]
+        best_rel_point=None
         if os.path.exists("./tmp/cropped_depth"):
             for item in os.listdir("./tmp/cropped_depth"):
                 item_path = os.path.join("./tmp/cropped_depth", item)
@@ -136,7 +171,6 @@ class UserInputManagerServer(object):
                     print(f"Deleted {item_path}")
                 except Exception as e:
                     print(f"Failed to delete {item_path}. Reason: {e}")
-        x1,x2,y1,y2=None,None,None,None
         for i in range(rgbd_set.length):
             print(i)
             start_time=time()
@@ -155,7 +189,7 @@ class UserInputManagerServer(object):
             #    user_prompt_list.append(prompt_image[i][j])
             caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
             gpt_response=caller.call(model="gpt-4o-2024-08-06")
-            print(f"gpt response is {response}")
+            print(f"gpt response is {gpt_response}")
             gpt_answer_log+=gpt_response+"\n"
 
             response = json.loads(gpt_response)["final_decision"]  
@@ -165,94 +199,71 @@ class UserInputManagerServer(object):
             print(f"gpt selected bounding box is {response}")
             if int(response)==-1:
                 print(f"target not found in frame {i}")
+                print(f"frame {i} took {time()-start_time} seconds")
+
                 continue
 
             try:
                 x1, y1, x2, y2 = tuple(bbox_list_list[i][int(response)])
+                x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
+                print(f"bounding box is {x1,y1,x2,y2}")
+                # Cap the x2 and y2 values at the image's width and height
+                x1 = max(x1, 0)
+                y1 = max(y1, 0)
+                x2 = min(x2, rgbd_set.data[i][0].width)
+                y2 = min(y2, rgbd_set.data[i][0].height)
+                cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
+                        #get segmentation mask
+                self.seg_any.encode(cropped_image)
+
+                mask=self.seg_any.get_mask()
+                #save the masked cropped image in /tem/masked
+                os.makedirs("./tmp/masked", exist_ok=True)
+                self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
+                number_of_true = np.sum(mask)
+        
+                #get depth point
+                image=rgbd_set.data[i][1]
+                rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
+                masked_rel_points=mask[:,:,np.newaxis]*rel_points
+                sum_result=np.sum(masked_rel_points, axis=(0, 1))
+                best_rel_point=sum_result/number_of_true
+                print(f"the {owl_keyword} is at {best_rel_point}")
+                    
+                print(f"frame {i} took {time()-start_time} seconds")
+
+                
                 break
             except:
                 print(f"gpt error in frame {i}")
                 continue
         
-        #TBD Splatter points
+        # Splatter points
+        
         if x1 is None:
-            x1,y1,x2,y2=rgbd_set.points_array_detector()
-               
-        x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-        print(f"bounding box is {x1,y1,x2,y2}")
-        # Cap the x2 and y2 values at the image's width and height
-        x1 = max(x1, 0)
-        y1 = max(y1, 0)
-        x2 = min(x2, rgbd_set.data[i][0].width)
-        y2 = min(y2, rgbd_set.data[i][0].height)
-        cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
-        #print(f"cropped image size is {cropped_image.size}") 
-        
-        
-        #get segmentation mask
-        self.seg_any.encode(cropped_image)
-
-        mask=self.seg_any.get_mask()
-        #save the masked cropped image in /tem/masked
-        os.makedirs("./tmp/masked", exist_ok=True)
-        self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
-        number_of_true = np.sum(mask)
- 
-        #get depth point
-        image=rgbd_set.data[i][1]
-
-        sum_check=np.sum(image[y1:y2,x1:x2], axis=(0, 1))
-        rel_points=get3d(image,(x1,y1,x2,y2),info,i)
-        masked_rel_points=mask[:,:,np.newaxis]*rel_points
-        sum_result=np.sum(masked_rel_points, axis=(0, 1))
-        world_point_mean=sum_result/number_of_true
-        print(f"the {owl_keyword} is at {world_point_mean}")
-        stacked_rel_points.append(world_point_mean)
-        print(f"frame {i} took {time()-start_time} seconds")
-        
             
-        #remove outliers
-    
-        if len(stacked_rel_points)>1:    
-            
-            stacked_rel_points=np.array(stacked_rel_points)
-            #remove outliers
-            # Calculate Z-scores
-            z_scores = np.abs(stats.zscore(stacked_rel_points, axis=0))
+            #self.manager.add_new_input(rgbd_set)
+            os.makedirs("./tmp/point_grid", exist_ok=True)
 
-            # Set a threshold (e.g., 3) for identifying outliers
-            threshold = 2
-
-            # Remove outliers
-            non_outliers = (z_scores < threshold).all(axis=1)
-            stacked_rel_points = stacked_rel_points[non_outliers]
-
-        #get clusters and pick top 1 best relative point
-        if len(stacked_rel_points)>1:
-            kmeans = KMeans(n_clusters=2)
-            kmeans.fit(stacked_rel_points)
-            labels = kmeans.labels_
-
-            means = np.array([stacked_rel_points[labels == i].mean(axis=0) for i in range(2)])
-            print(f"more than one point detected")
-            for i in range(2):
-                print(f"Number of points in cluster {i}: {np.sum(labels == i)}")
-                print(f"Mean of cluster {i}: {means[i]}")
-                
-            if np.linalg.norm(means[0] - means[1]) > 0.3:
-                if np.sum(labels == 0) > np.sum(labels == 1):
-                    best_rel_point=means[0]
+            point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
+            with open('./prompts/visual_selector/point_grid', 'r') as file:
+                prompt_json = json.loads(file.read())
+            system_prompt=prompt_json["system_prompt"]
+            response_format=prompt_json["response_format"]
+            user_prompt=gpt_keyword
+            for i in range(len(point_grid_image_list)):
+                image=point_grid_image_list[i]
+                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                response=caller.call(model="gpt-4o-2024-08-06")
+                gpt_answer_log+=response+"\n"
+                print(f"gpt response is {response}")
+                result_dict = json.loads(response)
+                if result_dict["final_decision"]!="-1":
+                    best_pixel=points_coord_list[int(result_dict["final_decision"])]
+                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                    break
                 else:
-                    best_rel_point=means[1]
-            else:
-                best_rel_point=means[0]
-                    
-        elif len(stacked_rel_points)==1:
-            print(f"one point detected: {stacked_rel_points[0]}")
-            best_rel_point=stacked_rel_points[0]
-        else:
-            print("no point detected")
-            best_rel_point=None
+                    print(f"target not found in frame {i} with point grid")   
             
         if best_rel_point is not None:
             self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
@@ -282,6 +293,7 @@ class UserInputManagerServer(object):
             result.success = True
             result.message = "Completed"
             '''
+        
         else:
             self.rel_pos_publisher.publish(int(-1))
 
@@ -292,18 +304,15 @@ class UserInputManagerServer(object):
 
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
-        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,gpt_answer_log)
+        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,gpt_answer_log)
 
         #print("finish",torch.cuda.mem_get_info())
 
         #self.action_server.set_succeeded(result)
         
-import os
-import datetime
-import numpy as np
-from PIL import Image
 
-def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists, gpt_log):
+
+def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists,point_grid_image_list, gpt_log):
     # Create a folder with the current time as folder_name
     current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     base_folder = os.path.join('./log', current_time)
@@ -330,7 +339,8 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
     # Create a labeled_image folder inside the base_folder
     labeled_image_folder = os.path.join(base_folder, 'labeled_image')
     os.makedirs(labeled_image_folder, exist_ok=True)
-    
+    point_grid_image_folder=os.path.join(base_folder, 'point_grid_image')
+    os.makedirs(point_grid_image_folder, exist_ok=True)
     # Save each PIL image in labeled_image_list
     for idx, pil_image in enumerate(labeled_image_list):
         image_path = os.path.join(labeled_image_folder, f'labeled_image_{idx}.png')
@@ -344,7 +354,10 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
     for idx, pil_image in enumerate(alter_labeled_image_lists):
         image_path = os.path.join(alter_labeled_image_folder, f'alter_labeled_image_{idx}.png')
         pil_image.save(image_path)
-    
+    for idx, pil_image in enumerate(point_grid_image_list):
+        image_path = os.path.join(point_grid_image_folder, f'point_grid_image_{idx}.png')
+        pil_image.save(image_path)
+
     # Save bbox_list_list as a text file
     bbox_list_path = os.path.join(base_folder, 'bbox_list.txt')
     with open(bbox_list_path, 'w') as f:

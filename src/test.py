@@ -84,9 +84,13 @@ if __name__ == '__main__':
         rospy.sleep(1)
 
         print("Publisher initialized")
-        message = "find the black box that says kinova"
-        pub.publish(message)
-        print(f"Message published: {message}")
-
+        while not rospy.is_shutdown():
+          message=input("Press Enter to publish a message")
+          if message=="":
+            message=last_message
+          last_message=message
+          pub.publish(message)
+          print(f"Message published: {message}")
+        
     except rospy.ROSInterruptException:
         pass

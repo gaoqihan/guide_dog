@@ -93,7 +93,10 @@ class Detector:
                     filtered_labels.append(group['labels'][idx])
 
             # Convert lists back to tensors
-            results.boxes = torch.stack(filtered_boxes)
+            if filtered_boxes:
+                results.boxes = torch.stack(filtered_boxes)
+            else:
+                results.boxes = torch.tensor([])
             results.scores = torch.tensor(filtered_scores)
             results.labels = torch.tensor(filtered_labels)
 
@@ -148,14 +151,13 @@ class Detector:
             elif mode=="large":
                 copied_image = annotate(image, results,size=2)
             elif mode=="bbox":
-                copied_image = draw_owl_output(image, results, text=text, draw_text=False)
+                copied_image = draw_owl_output(image, results, text=text, draw_text=True)
             else:
                 copied_image = annotate(image, results,size=1)
 
             output_path = os.path.join(output_dir, 'bbox_image.png')
 
             copied_image.save(output_path)
-            print(type(copied_image))
             return copied_image
 
 import PIL.Image
@@ -196,7 +198,7 @@ def annotate(image, output: OwlDecodeOutput,size=1):
         )
 
         # Determine the radius of the circle
-        radius = max(text_width, text_height) // 2 + 10  # Add some padding
+        radius = max(text_width, text_height) // 2  # Add some padding
 
         cv2.circle(
             image,
@@ -216,7 +218,7 @@ def annotate(image, output: OwlDecodeOutput,size=1):
             font,
             font_scale,
             (255, 255, 255),  # white color for text
-            2,  # thickness
+            1,  # thickness
             cv2.LINE_AA
         )
     if is_pil:

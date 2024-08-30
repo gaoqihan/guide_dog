@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import shutil
 
 
-def get3d(image,bounding_box,info,index):
+def get3d_bbox(image,bounding_box,info,index):
     bridge = CvBridge()
     cam_model = image_geometry.PinholeCameraModel()
     x1, y1, x2, y2= bounding_box
@@ -52,6 +52,22 @@ def get3d(image,bounding_box,info,index):
     return point_cloud
 
 
+
+def get3d_point(image,point,info,index):
+    bridge = CvBridge()
+    cam_model = image_geometry.PinholeCameraModel()
+    x, y= point
+    #d_ref=image[y2,x2]
+    
+    d_ref=image[y,x]
+
+    real_z = image[y,x] * 0.001
+    cam_model.fromCameraInfo(info)
+
+
+    real_x=(x-cam_model.cx())/cam_model.fx()*real_z
+    real_y=(y-cam_model.cy())/cam_model.fy()*real_z
+    return np.array((real_x,real_y,real_z))
 
 
 
