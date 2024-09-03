@@ -99,9 +99,10 @@ class UserInputManagerServer(object):
         best_rel_point=None
 
         caller=GPTCaller()
-        detector_enabled=False
-        sam_enabled=True
-        point_grid_enabled=False
+        detector_enabled=True
+        #sam_enabled=True
+        sam_enabled=False
+        point_grid_enabled=True
 
         #distill the task thruough gpt
 
@@ -199,10 +200,15 @@ class UserInputManagerServer(object):
             
                     #get depth point
                     image=rgbd_set.data[i][1]
-                    rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
-                    masked_rel_points=mask[:,:,np.newaxis]*rel_points
-                    sum_result=np.sum(masked_rel_points, axis=(0, 1))
-                    best_rel_point=sum_result/number_of_true
+
+                    #rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
+                    #masked_rel_points=mask[:,:,np.newaxis]*rel_points
+                    #sum_result=np.sum(masked_rel_points, axis=(0, 1))
+                    #best_rel_point=sum_result/number_of_true
+
+                    best_rel_point = get3d_point(image, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)), info, i)
+                    print("best rel point = ", best_rel_point, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)))
+
                     print(f"the {owl_keyword} is at {best_rel_point}")
                         
                     print(f"frame {i} took {time()-start_time} seconds")
@@ -245,6 +251,7 @@ class UserInputManagerServer(object):
                 os.makedirs("./tmp/point_grid", exist_ok=True)
 
                 point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
+                #point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=400)
                 with open('./prompts/visual_selector/point_grid', 'r') as file:
                     prompt_json = json.loads(file.read())
                 system_prompt=prompt_json["system_prompt"]
@@ -266,7 +273,6 @@ class UserInputManagerServer(object):
         save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list,gpt_answer_log)
     
         if best_rel_point is not None:
-            """
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
             self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
@@ -282,7 +288,7 @@ class UserInputManagerServer(object):
 
             pose.pose.position.x = object_position_in_map[0]
             pose.pose.position.y = object_position_in_map[1]
-            pose.pose.position.z = object_position_in_map[2]
+            pose.pose.position.z = 0
 
             pose.pose.orientation.x = 0
             pose.pose.orientation.y = 0
@@ -292,7 +298,6 @@ class UserInputManagerServer(object):
             for i in range(5):
                 
                 self.goal_pub.publish(pose)
-            """
             print("Done publishing goal")
             #result.success = True
             #result.message = "Completed"
