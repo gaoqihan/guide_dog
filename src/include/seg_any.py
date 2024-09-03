@@ -123,6 +123,7 @@ class SegAny:
             plt.savefig(filename)
 
     def get_auto_mask(self,image):
+        
         masks = self.auto_mask_generator.generate(image)
         point_list = []
         for mask in masks:
@@ -130,7 +131,7 @@ class SegAny:
             # Calculate the center of mass
             centroid = measurements.center_of_mass(binary_mask)
 
-            centroid_int = (int(round(centroid[0])), int(round(centroid[1])))
+            centroid_int = (int(round(centroid[1])), int(round(centroid[0])))
             point_list.append(centroid_int)
 
         labeled_image = point_placer(image, point_list)
