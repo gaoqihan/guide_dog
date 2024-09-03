@@ -193,6 +193,18 @@ class UserRGBDSet(UserInput):
         return self.bbox_list_list,self.labeled_image_list,alt_labeled_image_list
     
 
+    def seg_any_label(self,seg_any_object):
+        labeled_image_list=[]
+        for image, depth in self.data:
+            image = np.array(image)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            labeled_image,point_list=seg_any_object.get_auto_mask(image)
+            labeled_image = Image.fromarray(labeled_image)
+            labeled_image_list.append(labeled_image)
+            break #takes too long, only do once
+        return labeled_image_list,point_list
+        
+    
     def point_grid_label(self, points_num=32):
         is_pil = not isinstance(self.data[0][0], np.ndarray)
 

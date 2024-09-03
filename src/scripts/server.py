@@ -12,7 +12,6 @@ from std_srvs.srv import Empty, EmptyResponse  # Import the Empty service type a
 import torch
 import subprocess  # Import subprocess module
 import sys  # Import sys module
-from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 from scipy import stats
 import json
 from time import time
@@ -40,7 +39,10 @@ from seg_any import SegAny
 from depth_to_3d import get3d_bbox,get3d_point,MapBridge
 from utils import extract_number_from_brackets
 from owl_detector import Detector
-
+from nanosam.mobile_sam.automatic_mask_generator import SamAutomaticMaskGenerator
+from nanosam.mobile_sam.build_sam import sam_model_registry
+#from nanosam.mobile_sam.predictor import SamPredictor
+import torch
 class UserInputManagerServer(object):
     def __init__(self):
         #self.action_server = actionlib.SimpleActionServer('visual_locator_action', ObjectDetectorAction, self.object_finder, False)
@@ -92,6 +94,7 @@ class UserInputManagerServer(object):
         labeled_image_list=[]
         alter_labeled_image_lists=[]
         point_grid_image_list=[]
+        sam_labeled_image_list=[]
         x1,x2,y1,y2=None,None,None,None
 
         caller=GPTCaller()
@@ -117,48 +120,9 @@ class UserInputManagerServer(object):
         print(owl_keyword,gpt_keyword)
         
 
-
-        if x1 is None:
-            
-            #self.manager.add_new_input(rgbd_set)
-            os.makedirs("./tmp/point_grid", exist_ok=True)
-
-            point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
-            with open('./prompts/visual_selector/point_grid', 'r') as file:
-                prompt_json = json.loads(file.read())
-            system_prompt=prompt_json["system_prompt"]
-            response_format=prompt_json["response_format"]
-            user_prompt=gpt_keyword
-            for i in range(len(point_grid_image_list)):
-                image=point_grid_image_list[i]
-                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
-                response=caller.call(model="gpt-4o-2024-08-06")
-                gpt_answer_log+=response+"\n"
-                print(f"gpt response is {response}")
-                result_dict = json.loads(response)
-                if result_dict["final_decision"]!="-1":
-                    best_pixel=points_coord_list[int(result_dict["final_decision"])]
-                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
-                    break
-                else:
-                    print(f"target not found in frame {i} with point grid")   
-
-
-
-
-
+        #Approach 1: Owl detector
         #get bounding boxes through owl
         bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
-        
-        #image=Image.open("./tmp/color/0.png")
-
-       
-        #choose the bounding box through gpt
-        #system_prompt="You are an AI assistant that can help with identifiying requested item in an image. The options will be included in at most three \
-        #    bounding boxes with different color. You will be provided with a whole image containing bounding boxes, and cropped images corresponding to the bounding boxes. An index number is attached to each bounding box: the bounding box 0 is red, the bounding box 1 is green, and the bounding box 2 is blue. \
-        #        Pick the bounding box that contains requested item by anwsering the index number. reason about each bounding box on why or why not it is selected, \
-        #            describe the location of the bounding box in the picture, the color of the bounding box, the color of the item inside the box, and the index of the bounding box, then you MUST give a confidence score for picking this bounding box range from 0 to 10 (0 being lowest). return your \
-        #                selected index of bounding box in []. if none of the bounding box is desirable, answer shoueld be [-1]" #return nothing but the number. Return -1 if not found."
         
         with open('./prompts/visual_selector/given_points', 'r') as file:
             prompt_json = json.loads(file.read())
@@ -242,11 +206,34 @@ class UserInputManagerServer(object):
             except:
                 print(f"gpt error in frame {i}")
                 continue
+        #Method2 SAM detector:
+        if best_rel_point is None:
+            print("no object detected by owl detector, trying SAM detector")
+            sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
+            with open('./prompts/visual_selector/given_points', 'r') as file:
+                prompt_json = json.loads(file.read())
+            system_prompt=prompt_json["system_prompt"]
+            response_format=prompt_json["response_format"]
+            user_prompt=gpt_keyword
+            for i in range(len(sam_labeled_image_list)):
+                image=sam_labeled_image_list[i]
+                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                response=caller.call(model="gpt-4o-2024-08-06")
+                gpt_answer_log+=response+"\n"
+                print(f"gpt response is {response}")
+                result_dict = json.loads(response)
+                if result_dict["final_decision"]!="-1":
+                    best_pixel=point_list[int(result_dict["final_decision"])]
+                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                    break
+                else:
+                    print(f"target not found in frame {i} with point grid")   
+                    
         
-        # Splatter points
+        # Grid points
         
-        if x1 is None:
-            
+        if best_rel_point is None:
+            print("no object detected by SAM detector, trying point grid")
             #self.manager.add_new_input(rgbd_set)
             os.makedirs("./tmp/point_grid", exist_ok=True)
 
@@ -269,7 +256,8 @@ class UserInputManagerServer(object):
                     break
                 else:
                     print(f"target not found in frame {i} with point grid")   
-            
+        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list,gpt_answer_log)
+    
         if best_rel_point is not None:
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
@@ -311,7 +299,6 @@ class UserInputManagerServer(object):
 
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
-        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,gpt_answer_log)
 
         #print("finish",torch.cuda.mem_get_info())
 
@@ -319,7 +306,7 @@ class UserInputManagerServer(object):
         
 
 
-def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists,point_grid_image_list, gpt_log):
+def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list, gpt_log):
     # Create a folder with the current time as folder_name
     current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     base_folder = os.path.join('./log', current_time)
@@ -348,6 +335,8 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
     os.makedirs(labeled_image_folder, exist_ok=True)
     point_grid_image_folder=os.path.join(base_folder, 'point_grid_image')
     os.makedirs(point_grid_image_folder, exist_ok=True)
+    sam_image_folder=os.path.join(base_folder, 'sam_image')
+    os.makedirs(sam_image_folder, exist_ok=True)
     # Save each PIL image in labeled_image_list
     for idx, pil_image in enumerate(labeled_image_list):
         image_path = os.path.join(labeled_image_folder, f'labeled_image_{idx}.png')
@@ -364,7 +353,9 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
     for idx, pil_image in enumerate(point_grid_image_list):
         image_path = os.path.join(point_grid_image_folder, f'point_grid_image_{idx}.png')
         pil_image.save(image_path)
-
+    for idx, pil_image in enumerate(sam_labeled_image_list):
+        image_path = os.path.join(sam_image_folder, f'sam_labeled_image_{idx}.png')
+        pil_image.save(image_path)
     # Save bbox_list_list as a text file
     bbox_list_path = os.path.join(base_folder, 'bbox_list.txt')
     with open(bbox_list_path, 'w') as f:

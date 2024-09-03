@@ -1,0 +1,19 @@
+Outside of docker:
+roscore
+in a new terminal:
+roslaunch realsense2_camera rs_camera.launch align_depth:=true
+docker run -it --network=host --device /dev/snd guide-dog:all-in
+
+Inside docker image:
+cd ~/catkin_ws/src/guide_dog/src
+python3 ./script/VideoQueue.py
+
+in a new terminal
+python3 ./script/server.py
+
+in a new terminal
+python3 ./test.py
+
+now you can input your command and press enter to send. if your input is "" it will automatically send the last command. If your first input is "" it will crash.
+
+

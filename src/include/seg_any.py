@@ -2,12 +2,14 @@ import sys
 sys.path.append("../model/")
 import cv2
 import numpy as np
-from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+#from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 import matplotlib.pyplot as plt
-import cv2
 import torch
 from nanosam.utils.predictor import Predictor as NanoPredictor
-
+import copy
+from scipy.ndimage import measurements
+from nanosam.mobile_sam.automatic_mask_generator import SamAutomaticMaskGenerator,SamPredictor
+from nanosam.mobile_sam.build_sam import sam_model_registry
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
@@ -41,12 +43,19 @@ class SegAny:
             self.image = None
             print("SegAny Model loaded")
             self.predictor = SamPredictor(self.sam)
-        elif self.model=="nano":
+        if self.model=="nano":
             self.predictor = NanoPredictor(
                 image_encoder_engine="/opt/nanosam/data/resnet18_image_encoder.engine",
                 mask_decoder_engine="/opt/nanosam/data/mobile_sam_mask_decoder.engine"
             )
             print("Nano Model loaded")
+        
+        sam_checkpoint = "./model/mobile_sam.pt"
+        model_type = "vit_t"
+        self.auto_mask_sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+        self.auto_mask_sam.to(device="cuda")
+        self.auto_mask_generator = SamAutomaticMaskGenerator(self.auto_mask_sam)
+        print("SegAny auto mask Model loaded")
 
     def encode(self, input_image):
         if self.model=="default":
@@ -88,6 +97,7 @@ class SegAny:
             return self.mask
     
     
+    
     def delete_predictor(self):
         del self.predictor
         torch.cuda.empty_cache()
@@ -111,3 +121,59 @@ class SegAny:
             #y = [self.bbox[1], self.bbox[1], self.bbox[3], self.bbox[3], self.bbox[1]]
             #plt.plot(x, y, 'g-')
             plt.savefig(filename)
+
+    def get_auto_mask(self,image):
+        masks = self.auto_mask_generator.generate(image)
+        point_list = []
+        for mask in masks:
+            binary_mask = mask['segmentation']
+            # Calculate the center of mass
+            centroid = measurements.center_of_mass(binary_mask)
+
+            centroid_int = (int(round(centroid[1])), int(round(centroid[0])))
+            point_list.append(centroid_int)
+
+        labeled_image = point_placer(image, point_list)
+        # Swap (y,x) to (x,y) in point_list
+        point_list = [(y, x) for x, y in point_list]
+        return labeled_image,point_list
+        
+def point_placer(image, point_list):
+    image = copy.deepcopy(image)
+    is_pil = not isinstance(image, np.ndarray)
+    if is_pil:
+        image = np.asarray(image)
+    height, width, _ = image.shape
+    
+    # Load a larger font
+    font_scale = 0.5  # Adjust this value as needed
+    font_thickness = 1  # Adjust this value as needed
+    font = cv2.FONT_HERSHEY_TRIPLEX
+    cnt=0
+    # Calculate coordinates for grid points
+    for x,y in point_list:
+        text=str(cnt)
+        cnt+=1
+        (text_width, text_height), baseline = cv2.getTextSize(
+                text,
+                font,
+                font_scale,
+                2  # thickness
+            )
+
+        # Draw a solid black circle
+        radius = max(text_width, text_height) //2  # Add some padding
+        cv2.circle(image, (x, y), radius, (0, 0, 0), -1)
+            
+        # Calculate text size and position to center it
+        text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+        text_x = x - text_size[0] // 2
+        text_y = y + text_size[1] // 2
+            
+        # Draw the number in white
+        cv2.putText(image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
+    if is_pil:
+        image = Image.fromarray(image)
+    
+    
+    return image
