@@ -96,9 +96,12 @@ class UserInputManagerServer(object):
         point_grid_image_list=[]
         sam_labeled_image_list=[]
         x1,x2,y1,y2=None,None,None,None
+        best_rel_point=None
 
         caller=GPTCaller()
-
+        detector_enabled=False
+        sam_enabled=True
+        point_grid_enabled=False
 
         #distill the task thruough gpt
 
@@ -107,7 +110,8 @@ class UserInputManagerServer(object):
         system_prompt=prompt_json["system_prompt"]
         response_format=prompt_json["response_format"]
         user_prompt=self.task
-        caller.create_prompt([user_prompt],system_prompt_list=[system_prompt],response_format=response_format)
+        raw_image=rgbd_set.data[0][0]
+        caller.create_prompt([user_prompt,raw_image],system_prompt_list=[system_prompt],response_format=response_format)
         response=caller.call(model="gpt-4o-2024-08-06")
         gpt_answer_log+=response+"\n"
         result_dict = json.loads(response)
@@ -116,149 +120,153 @@ class UserInputManagerServer(object):
         owl_keyword=result_dict["keyword"]
         
         gpt_keyword=result_dict["key_instruction"]
+        existence_check=result_dict["existence_check"]
 
-        print(owl_keyword,gpt_keyword)
+        print(owl_keyword,gpt_keyword,existence_check)
         
 
         #Approach 1: Owl detector
-        #get bounding boxes through owl
-        bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
-        
-        with open('./prompts/visual_selector/given_points', 'r') as file:
-            prompt_json = json.loads(file.read())
-        system_prompt=prompt_json["system_prompt"]
-        response_format=prompt_json["response_format"]
-        user_prompt=f"Task is : {gpt_keyword}"
+        if detector_enabled:
 
-        
-        best_rel_point=None
-        if os.path.exists("./tmp/cropped_depth"):
-            for item in os.listdir("./tmp/cropped_depth"):
-                item_path = os.path.join("./tmp/cropped_depth", item)
-                try:
-                    os.remove(item_path)  # Remove files and links
-                    print(f"Deleted {item_path}")
-                except Exception as e:
-                    print(f"Failed to delete {item_path}. Reason: {e}")
-        for i in range(rgbd_set.length):
-            print(i)
-            start_time=time()
-            if len(bbox_list_list[i])==0:
-                print(f"no bounding box in frame {i}")
-                continue
-            selection_range="choose from following numbers"+str(range(len(bbox_list_list[i])))
-            user_prompt_list=[user_prompt,selection_range,labeled_image_list[i]]
-            #test_pic_path=f"./tmp/bbox_image.png"
-            #test_pic = Image.open(test_pic_path)
-            #test_pic=caller.encode_image(test_pic_path)
-            #user_prompt=f"Task is : find an empty chair to sit down"
-            #user_prompt_list=[user_prompt,selection_range,test_pic]
-            #for j in range(len(prompt_image[i])):
-            #    user_prompt_list.append(f"{j}: ")
-            #    user_prompt_list.append(prompt_image[i][j])
-            caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
-            gpt_response=caller.call(model="gpt-4o-2024-08-06")
-            print(f"gpt response is {gpt_response}")
-            gpt_answer_log+=gpt_response+"\n"
-
-            response = json.loads(gpt_response)["final_decision"]  
+            #get bounding boxes through owl
+            bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
             
-            print("time for gpt call is: ", time()-start_time)
-            #response=0
-            print(f"gpt selected bounding box is {response}")
-            if int(response)==-1:
-                print(f"target not found in frame {i}")
-                print(f"frame {i} took {time()-start_time} seconds")
-
-                continue
-
-            try:
-                x1, y1, x2, y2 = tuple(bbox_list_list[i][int(response)])
-                x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-                print(f"bounding box is {x1,y1,x2,y2}")
-                # Cap the x2 and y2 values at the image's width and height
-                x1 = max(x1, 0)
-                y1 = max(y1, 0)
-                x2 = min(x2, rgbd_set.data[i][0].width)
-                y2 = min(y2, rgbd_set.data[i][0].height)
-                cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
-                        #get segmentation mask
-                self.seg_any.encode(cropped_image)
-
-                mask=self.seg_any.get_mask()
-                #save the masked cropped image in /tem/masked
-                os.makedirs("./tmp/masked", exist_ok=True)
-                self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
-                number_of_true = np.sum(mask)
-        
-                #get depth point
-                image=rgbd_set.data[i][1]
-                rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
-                masked_rel_points=mask[:,:,np.newaxis]*rel_points
-                sum_result=np.sum(masked_rel_points, axis=(0, 1))
-                best_rel_point=sum_result/number_of_true
-                print(f"the {owl_keyword} is at {best_rel_point}")
-                    
-                print(f"frame {i} took {time()-start_time} seconds")
-
-                
-                break
-            except:
-                print(f"gpt error in frame {i}")
-                continue
-        #Method2 SAM detector:
-        if best_rel_point is None:
-            print("no object detected by owl detector, trying SAM detector")
-            sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
             with open('./prompts/visual_selector/given_points', 'r') as file:
                 prompt_json = json.loads(file.read())
             system_prompt=prompt_json["system_prompt"]
             response_format=prompt_json["response_format"]
-            user_prompt=gpt_keyword
-            for i in range(len(sam_labeled_image_list)):
-                image=sam_labeled_image_list[i]
-                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
-                response=caller.call(model="gpt-4o-2024-08-06")
-                gpt_answer_log+=response+"\n"
-                print(f"gpt response is {response}")
-                result_dict = json.loads(response)
-                if result_dict["final_decision"]!="-1":
-                    best_pixel=point_list[int(result_dict["final_decision"])]
-                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+            user_prompt=f"Task is : {gpt_keyword}"
+
+            
+            if os.path.exists("./tmp/cropped_depth"):
+                for item in os.listdir("./tmp/cropped_depth"):
+                    item_path = os.path.join("./tmp/cropped_depth", item)
+                    try:
+                        os.remove(item_path)  # Remove files and links
+                        print(f"Deleted {item_path}")
+                    except Exception as e:
+                        print(f"Failed to delete {item_path}. Reason: {e}")           
+            for i in range(rgbd_set.length):
+                print(i)
+                start_time=time()
+                if len(bbox_list_list[i])==0:
+                    print(f"no bounding box in frame {i}")
+                    continue
+                selection_range="choose from following numbers"+str(range(len(bbox_list_list[i])))
+                user_prompt_list=[user_prompt,selection_range,labeled_image_list[i]]
+                #test_pic_path=f"./tmp/bbox_image.png"
+                #test_pic = Image.open(test_pic_path)
+                #test_pic=caller.encode_image(test_pic_path)
+                #user_prompt=f"Task is : find an empty chair to sit down"
+                #user_prompt_list=[user_prompt,selection_range,test_pic]
+                #for j in range(len(prompt_image[i])):
+                #    user_prompt_list.append(f"{j}: ")
+                #    user_prompt_list.append(prompt_image[i][j])
+                caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
+                gpt_response=caller.call(model="gpt-4o-2024-08-06")
+                print(f"gpt response is {gpt_response}")
+                gpt_answer_log+=gpt_response+"\n"
+
+                response = json.loads(gpt_response)["final_decision"]  
+                
+                print("time for gpt call is: ", time()-start_time)
+                #response=0
+                print(f"gpt selected bounding box is {response}")
+                if int(response)==-1:
+                    print(f"target not found in frame {i}")
+                    print(f"frame {i} took {time()-start_time} seconds")
+
+                    continue
+
+                try:
+                    x1, y1, x2, y2 = tuple(bbox_list_list[i][int(response)])
+                    x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
+                    print(f"bounding box is {x1,y1,x2,y2}")
+                    # Cap the x2 and y2 values at the image's width and height
+                    x1 = max(x1, 0)
+                    y1 = max(y1, 0)
+                    x2 = min(x2, rgbd_set.data[i][0].width)
+                    y2 = min(y2, rgbd_set.data[i][0].height)
+                    cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
+                            #get segmentation mask
+                    self.seg_any.encode(cropped_image)
+
+                    mask=self.seg_any.get_mask()
+                    #save the masked cropped image in /tem/masked
+                    os.makedirs("./tmp/masked", exist_ok=True)
+                    self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
+                    number_of_true = np.sum(mask)
+            
+                    #get depth point
+                    image=rgbd_set.data[i][1]
+                    rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
+                    masked_rel_points=mask[:,:,np.newaxis]*rel_points
+                    sum_result=np.sum(masked_rel_points, axis=(0, 1))
+                    best_rel_point=sum_result/number_of_true
+                    print(f"the {owl_keyword} is at {best_rel_point}")
+                        
+                    print(f"frame {i} took {time()-start_time} seconds")
+
+                    
                     break
-                else:
-                    print(f"target not found in frame {i} with point grid")   
+                except:
+                    print(f"gpt error in frame {i}")
+                    continue
+        #Method2 SAM detector:
+        if sam_enabled:
+            if best_rel_point is None:
+                print("no object detected by owl detector, trying SAM detector")
+                sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
+                with open('./prompts/visual_selector/sam_points', 'r') as file:
+                    prompt_json = json.loads(file.read())
+                system_prompt=prompt_json["system_prompt"]
+                response_format=prompt_json["response_format"]
+                user_prompt=gpt_keyword
+                for i in range(len(sam_labeled_image_list)):
+                    image=sam_labeled_image_list[i]
+                    caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                    response=caller.call(model="gpt-4o-2024-08-06")
+                    gpt_answer_log+=response+"\n"
+                    print(f"gpt response is {response}")
+                    result_dict = json.loads(response)
+                    if result_dict["final_decision"]!="-1":
+                        best_pixel=point_list[int(result_dict["final_decision"])]
+                        best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        break
+                    else:
+                        print(f"target not found in frame {i} with point grid")   
                     
         
         # Grid points
-        
-        if best_rel_point is None:
-            print("no object detected by SAM detector, trying point grid")
-            #self.manager.add_new_input(rgbd_set)
-            os.makedirs("./tmp/point_grid", exist_ok=True)
+        if point_grid_enabled:
+            if best_rel_point is None:
+                print("no object detected by SAM detector, trying point grid")
+                #self.manager.add_new_input(rgbd_set)
+                os.makedirs("./tmp/point_grid", exist_ok=True)
 
-            point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
-            with open('./prompts/visual_selector/point_grid', 'r') as file:
-                prompt_json = json.loads(file.read())
-            system_prompt=prompt_json["system_prompt"]
-            response_format=prompt_json["response_format"]
-            user_prompt=gpt_keyword
-            for i in range(len(point_grid_image_list)):
-                image=point_grid_image_list[i]
-                caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
-                response=caller.call(model="gpt-4o-2024-08-06")
-                gpt_answer_log+=response+"\n"
-                print(f"gpt response is {response}")
-                result_dict = json.loads(response)
-                if result_dict["final_decision"]!="-1":
-                    best_pixel=points_coord_list[int(result_dict["final_decision"])]
-                    best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
-                    break
-                else:
-                    print(f"target not found in frame {i} with point grid")   
+                point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
+                with open('./prompts/visual_selector/point_grid', 'r') as file:
+                    prompt_json = json.loads(file.read())
+                system_prompt=prompt_json["system_prompt"]
+                response_format=prompt_json["response_format"]
+                user_prompt=gpt_keyword
+                for i in range(len(point_grid_image_list)):
+                    image=point_grid_image_list[i]
+                    caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                    response=caller.call(model="gpt-4o-2024-08-06")
+                    gpt_answer_log+=response+"\n"
+                    print(f"gpt response is {response}")
+                    result_dict = json.loads(response)
+                    if result_dict["final_decision"]!="-1":
+                        best_pixel=points_coord_list[int(result_dict["final_decision"])]
+                        best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        break
+                    else:
+                        print(f"target not found in frame {i} with point grid")   
         save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list,gpt_answer_log)
     
         if best_rel_point is not None:
+            """
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
             self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
@@ -284,6 +292,7 @@ class UserInputManagerServer(object):
             for i in range(5):
                 
                 self.goal_pub.publish(pose)
+            """
             print("Done publishing goal")
             #result.success = True
             #result.message = "Completed"

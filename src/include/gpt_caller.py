@@ -6,7 +6,7 @@ from openai import OpenAI
 import os
 import re
 import shutil
-
+import time
 class GPTCaller:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -97,6 +97,7 @@ class GPTCaller:
         self.messages=messages
 
     def call(self,temperature=0.5,model="chatgpt-4o-latest"):
+        start_time = time.time()
         if model == "chatgpt-4o-latest":
             completion = self.client.chat.completions.create(
             model=model,
@@ -111,5 +112,5 @@ class GPTCaller:
             )
 
         #print(completion.choices[0].message)
-
+        print(f"GPT call time taken: {time.time()-start_time:.2f} seconds")
         return completion.choices[0].message.content

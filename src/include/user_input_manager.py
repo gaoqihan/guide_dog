@@ -200,6 +200,7 @@ class UserRGBDSet(UserInput):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             labeled_image,point_list=seg_any_object.get_auto_mask(image)
             labeled_image = Image.fromarray(labeled_image)
+            labeled_image = labeled_image.convert("RGB")
             labeled_image_list.append(labeled_image)
             break #takes too long, only do once
         return labeled_image_list,point_list

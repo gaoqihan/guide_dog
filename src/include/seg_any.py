@@ -130,12 +130,12 @@ class SegAny:
             # Calculate the center of mass
             centroid = measurements.center_of_mass(binary_mask)
 
-            centroid_int = (int(round(centroid[1])), int(round(centroid[0])))
+            centroid_int = (int(round(centroid[0])), int(round(centroid[1])))
             point_list.append(centroid_int)
 
         labeled_image = point_placer(image, point_list)
         # Swap (y,x) to (x,y) in point_list
-        point_list = [(y, x) for x, y in point_list]
+        #point_list = [(y, x) for x, y in point_list]
         return labeled_image,point_list
         
 def point_placer(image, point_list):
