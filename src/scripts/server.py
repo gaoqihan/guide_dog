@@ -99,7 +99,7 @@ class UserInputManagerServer(object):
         best_rel_point=None
 
         caller=GPTCaller()
-        detector_enabled=True
+        detector_enabled=False
         #sam_enabled=True
         sam_enabled=False
         point_grid_enabled=True
@@ -273,6 +273,7 @@ class UserInputManagerServer(object):
         save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list,gpt_answer_log)
     
         if best_rel_point is not None:
+            '''
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
             self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
@@ -298,6 +299,7 @@ class UserInputManagerServer(object):
             for i in range(5):
                 
                 self.goal_pub.publish(pose)
+            '''
             print("Done publishing goal")
             #result.success = True
             #result.message = "Completed"
