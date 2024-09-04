@@ -11,7 +11,7 @@
             "properties": {
               "existence_check":{
                 "type": "string",
-                "description": "The existence of the object in the image. If the object is not present, answer should be -1"
+                "description": "The existence of the object in the image. If present return True If the object is not present, answer should be False"
 
               },
               "reasoning_steps": {

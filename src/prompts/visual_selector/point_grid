@@ -9,11 +9,7 @@
           "schema": {
             "type": "object",
             "properties": {
-              "existence_check":{
-                "type": "string",
-                "description": "The existence of the object in the image. If the object is not present, answer should be -1"
 
-              },
               "reasoning_steps": {
                 "type": "array",
                 "items": {
@@ -27,7 +23,7 @@
                 "description": "You MUST only answer the selected number. if none of number is desirable, answer shoueld be -1"
               }
             },
-            "required": ["existence_check","reasoning_steps", "final_decision"],
+            "required": ["reasoning_steps", "final_decision"],
             "additionalProperties": false
           }
         }
