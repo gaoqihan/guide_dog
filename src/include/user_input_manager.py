@@ -232,7 +232,7 @@ class UserRGBDSet(UserInput):
                     x = int((j + 0.5) * width / grid_size)
                     y = int((i + 0.5) * height / grid_size)
                     points_coord_list.append((x, y))
-                    text = str(i * grid_size + j + 1)
+                    text = str(i * grid_size + j)
 
                     (text_width, text_height), baseline = cv2.getTextSize(
                         text,
@@ -246,7 +246,6 @@ class UserRGBDSet(UserInput):
                     cv2.circle(image, (x, y), radius, (0, 0, 0), -1)
                     
                     # Calculate text size and position to center it
-                    text = str(i * grid_size + j + 1)
                     text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
                     text_x = x - text_size[0] // 2
                     text_y = y + text_size[1] // 2
