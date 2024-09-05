@@ -51,8 +51,9 @@ class UserInputManagerServer(object):
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         rospy.Subscriber('/find_object', String,self.object_finder_text)
 
+        #self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
-        self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
+        #self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
 
         self.map_bridge=MapBridge()
         
@@ -95,6 +96,7 @@ class UserInputManagerServer(object):
         alter_labeled_image_lists=[]
         point_grid_image_list=[]
         sam_labeled_image_list=[]
+        look_around_image_list=[]
         x1,x2,y1,y2=None,None,None,None
         best_rel_point=None
 
@@ -103,25 +105,58 @@ class UserInputManagerServer(object):
         #sam_enabled=True
         sam_enabled=False
         point_grid_enabled=True
+        look_around=True
+        if look_around:
+            with open('./prompts/distillation/rotation_and_distillation', 'r') as file:
+                prompt_json = json.loads(file.read())
+            system_prompt=prompt_json["system_prompt"]
+            response_format=prompt_json["response_format"]
+            user_prompt=self.task
+            full_view_image=self.get_360_image()
+            #for now
+            full_view_image=rgbd_set.data[0][0] #remove this once we have 360 running
+            #end
+            labeled_360_image=rgbd_set.draw_vertical_lines_with_numbers(full_view_image)
+            look_around_image_list.append(labeled_360_image)
+            caller.create_prompt([user_prompt,labeled_360_image],system_prompt_list=[system_prompt],response_format=response_format)
+            response=caller.call(model="gpt-4o-2024-08-06")
+            gpt_answer_log+=response+"\n"
+            result_dict = json.loads(response)
 
+            #assume done
+            owl_keyword=result_dict["keyword"]
+            
+            gpt_keyword=result_dict["key_instruction"]
+            direction=result_dict["direction"]
+            existence_check=result_dict["existence_check"]
+
+            self.rotate_to_direction(int(direction))         
+            
+        else:
         #distill the task thruough gpt
 
-        with open('./prompts/distillation/prompt', 'r') as file:
-            prompt_json = json.loads(file.read())
-        system_prompt=prompt_json["system_prompt"]
-        response_format=prompt_json["response_format"]
-        user_prompt=self.task
-        raw_image=rgbd_set.data[0][0]
-        caller.create_prompt([user_prompt,raw_image],system_prompt_list=[system_prompt],response_format=response_format)
-        response=caller.call(model="gpt-4o-2024-08-06")
-        gpt_answer_log+=response+"\n"
-        result_dict = json.loads(response)
+            with open('./prompts/distillation/prompt', 'r') as file:
+                prompt_json = json.loads(file.read())
+            system_prompt=prompt_json["system_prompt"]
+            response_format=prompt_json["response_format"]
+            user_prompt=self.task
+            raw_image=rgbd_set.data[0][0]
+            caller.create_prompt([user_prompt,raw_image],system_prompt_list=[system_prompt],response_format=response_format)
+            response=caller.call(model="gpt-4o-2024-08-06")
+            gpt_answer_log+=response+"\n"
+            result_dict = json.loads(response)
 
-        #assume done
-        owl_keyword=result_dict["keyword"]
+            #assume done
+            owl_keyword=result_dict["keyword"]
+            
+            gpt_keyword=result_dict["key_instruction"]
+            existence_check=result_dict["existence_check"]
         
-        gpt_keyword=result_dict["key_instruction"]
-        existence_check=result_dict["existence_check"]
+        
+        if existence_check=="False":
+            detector_enabled=False
+            sam_enabled=False
+            point_grid_enabled=False
 
         print(owl_keyword,gpt_keyword,existence_check)
         
@@ -241,8 +276,6 @@ class UserInputManagerServer(object):
                         break
                     else:
                         print(f"target not found in frame {i} with point grid")   
-                    
-        
         # Grid points
         if point_grid_enabled:
             if best_rel_point is None:
@@ -270,13 +303,14 @@ class UserInputManagerServer(object):
                         break
                     else:
                         print(f"target not found in frame {i} with point grid")   
-        save_package(rgbd_set, bbox_list_list,labeled_image_list,alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list,gpt_answer_log)
+        #save the package
+        save_package(rgbd_set, labeled_image_list=labeled_image_list, alter_labeled_image_lists=alter_labeled_image_lists, bbox_list_list=bbox_list_list, point_grid_image_list=point_grid_image_list, sam_labeled_image_list=sam_labeled_image_list, look_around_image_list=look_around_image_list, gpt_log=gpt_answer_log)
     
         if best_rel_point is not None:
             '''
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
-            self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
+            #self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
             
             
             object_position_in_map=self.map_bridge.get_object_position_in_map(best_rel_point[0],best_rel_point[1],best_rel_point[2],1)
@@ -306,23 +340,41 @@ class UserInputManagerServer(object):
             
         
         else:
-            self.rel_pos_publisher.publish(int(-1))
+            '''
+            pose=PoseStamped()
+            pose.header.frame_id = "map"
+
+            pose.pose.position.x = -1
+            pose.pose.position.y = -1
+            pose.pose.position.z = 0
+
+            pose.pose.orientation.x = 0
+            pose.pose.orientation.y = 0
+            pose.pose.orientation.z = 0
+            pose.pose.orientation.w = 1
+            pose.header.stamp = rospy.Time.now()
+            for i in range(5):
+               
+                self.goal_pub.publish(pose)
+            '''
+            print('No object detected with OWL')
+            #self.rel_pos_publisher.publish(int(-1))
 
             #result.success = False
             #result.message = "No object detected"
-            
-        
-
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
-
-        #print("finish",torch.cuda.mem_get_info())
-
-        #self.action_server.set_succeeded(result)
         
+    def rotate_to_direction(self,direction):
+        print(f"rotating to {direction}")    
+        print("TBD")
+        pass
+    def get_360_image(self):
+        print("getting 360 image")
+        print("TBD")
+        pass
 
-
-def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_image_lists,point_grid_image_list,sam_labeled_image_list, gpt_log):
+def save_package(rgbd_set, bbox_list_list=[], labeled_image_list=[], alter_labeled_image_lists=[],point_grid_image_list=[],sam_labeled_image_list=[],look_around_image_list=[], gpt_log=""):
     # Create a folder with the current time as folder_name
     current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     base_folder = os.path.join('./log', current_time)
@@ -353,6 +405,8 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
     os.makedirs(point_grid_image_folder, exist_ok=True)
     sam_image_folder=os.path.join(base_folder, 'sam_image')
     os.makedirs(sam_image_folder, exist_ok=True)
+    look_around_image_folder=os.path.join(base_folder, 'look_around_image')
+    os.makedirs(look_around_image_folder, exist_ok=True)
     # Save each PIL image in labeled_image_list
     for idx, pil_image in enumerate(labeled_image_list):
         image_path = os.path.join(labeled_image_folder, f'labeled_image_{idx}.png')
@@ -371,6 +425,9 @@ def save_package(rgbd_set, bbox_list_list, labeled_image_list, alter_labeled_ima
         pil_image.save(image_path)
     for idx, pil_image in enumerate(sam_labeled_image_list):
         image_path = os.path.join(sam_image_folder, f'sam_labeled_image_{idx}.png')
+        pil_image.save(image_path)
+    for idx, pil_image in enumerate(look_around_image_list):
+        image_path = os.path.join(look_around_image_folder, f'look_around_image_{idx}.png')
         pil_image.save(image_path)
     # Save bbox_list_list as a text file
     bbox_list_path = os.path.join(base_folder, 'bbox_list.txt')
