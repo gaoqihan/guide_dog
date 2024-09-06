@@ -18,6 +18,7 @@ from time import time
 from std_msgs.msg import Float32, String
 from dotenv import load_dotenv
 import os
+from PIL import ImageDraw
 
 # Load environment variables from .env file
 load_dotenv()
@@ -50,7 +51,7 @@ class UserInputManagerServer(object):
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         rospy.Subscriber('/find_object', String,self.object_finder_text)
-
+        self.add_to_semantic_map_publisher=rospy.Publisher("/add_to_semantic_map", PoseStamped, queue_size=10)
         #self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
         self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
         #self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
@@ -101,10 +102,10 @@ class UserInputManagerServer(object):
         best_rel_point=None
 
         caller=GPTCaller()
-        detector_enabled=False
+        detector_enabled=True
         #sam_enabled=True
         sam_enabled=False
-        point_grid_enabled=True
+        point_grid_enabled=False
         look_around=True
         if look_around:
             with open('./prompts/distillation/rotation_and_distillation', 'r') as file:
@@ -244,8 +245,16 @@ class UserInputManagerServer(object):
                     best_rel_point = get3d_point(image, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)), info, i)
                     print("best rel point = ", best_rel_point, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)))
 
-                    print(f"the {owl_keyword} is at {best_rel_point}")
-                        
+                    print(f"the {owl_keyword} is at {best_rel_point},pixel cordinante is {(int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0))}")
+                    draw = ImageDraw.Draw(labeled_image_list[0])
+                    draw.ellipse(
+                        [
+                            (int((x1 + x2) * 0.5) - 5, int(y1 + (y2 - y1) * 1.0 / 4.0) - 5),
+                            (int((x1 + x2) * 0.5) + 5, int(y1 + (y2 - y1) * 1.0 / 4.0) + 5)
+                        ],
+                        outline="green",
+                        width=2
+                    )
                     print(f"frame {i} took {time()-start_time} seconds")
 
                     
@@ -275,7 +284,7 @@ class UserInputManagerServer(object):
                         best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
                         break
                     else:
-                        print(f"target not found in frame {i} with point grid")   
+                        print(f"target not found in frame {i} with point sam")   
         # Grid points
         if point_grid_enabled:
             if best_rel_point is None:
@@ -333,6 +342,8 @@ class UserInputManagerServer(object):
             for i in range(5):
                 
                 self.goal_pub.publish(pose)
+            #this needs to be changed, its not always owl_keypoint[0]. instead ask gpt to clarify what object it selected
+            add_to_permanant_map(owl_keyword[0],pose)
             '''
             print("Done publishing goal")
             #result.success = True
@@ -357,13 +368,28 @@ class UserInputManagerServer(object):
                
                 self.goal_pub.publish(pose)
             '''
-            print('No object detected with OWL')
+            print('No object detected')
             #self.rel_pos_publisher.publish(int(-1))
 
             #result.success = False
             #result.message = "No object detected"
         #resume video capture
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
+    
+    def add_to_permanant_map(self,object,pose_stamped):
+        caller=GPTCaller()
+
+        with open('./prompts/map_processing/add_semantic _point_to_map', 'r') as file:
+            prompt_json = json.loads(file.read())
+        system_prompt=prompt_json["system_prompt"]
+        response_format=[prompt_json["response_format"]]
+        user_prompt="the object is a "+object,"is the object a permanent object or a moveable object?"
+
+        self.caller.create_prompt([user_prompt],system_prompt_list=[system_prompt],response_format=response_format)
+        response=caller.call(model="gpt-4o-2024-08-06")
+        self.add_to_semantic_map_publisher.publish(pose_stamped)
+        print(f"gpt response is {response}")
+    
         
     def rotate_to_direction(self,direction):
         print(f"rotating to {direction}")    
@@ -373,6 +399,8 @@ class UserInputManagerServer(object):
         print("getting 360 image")
         print("TBD")
         pass
+    
+    
 
 def save_package(rgbd_set, bbox_list_list=[], labeled_image_list=[], alter_labeled_image_lists=[],point_grid_image_list=[],sam_labeled_image_list=[],look_around_image_list=[], gpt_log=""):
     # Create a folder with the current time as folder_name

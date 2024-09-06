@@ -220,36 +220,40 @@ class UserRGBDSet(UserInput):
             if is_pil:
                 image = np.asarray(image)
             height, width, _ = image.shape
+
+    
+            # Determine the number of rows and columns for the grid based on the aspect ratio
+            aspect_ratio = width / height
+            grid_cols = int((points_num * aspect_ratio) ** 0.5)
+            grid_rows = int(points_num / grid_cols)
             
             # Load a larger font
             font_scale = 0.5  # Adjust this value as needed
             font_thickness = 1  # Adjust this value as needed
             font = cv2.FONT_HERSHEY_TRIPLEX
-            
-            # Calculate coordinates for grid points
-            for i in range(grid_size):
-                for j in range(grid_size):
-                    x = int((j + 0.5) * width / grid_size)
-                    y = int((i + 0.5) * height / grid_size)
+              # Calculate coordinates for grid points
+            for i in range(grid_rows):
+                for j in range(grid_cols):
+                    x = int((j + 0.5) * width / grid_cols)
+                    y = int((i + 0.5) * height / grid_rows)
                     points_coord_list.append((x, y))
-                    text = str(i * grid_size + j)
-
+                    text = str(i * grid_cols + j)
                     (text_width, text_height), baseline = cv2.getTextSize(
-                        text,
-                        font,
-                        font_scale,
-                        2  # thickness
-                    )
+                                text,
+                                font,
+                                font_scale,
+                                2  # thickness
+                            )
 
                     # Draw a solid black circle
-                    radius = max(text_width, text_height) //2  # Add some padding
+                    radius = max(text_width, text_height) // 2  # Add some padding
                     cv2.circle(image, (x, y), radius, (0, 0, 0), -1)
-                    
+                            
                     # Calculate text size and position to center it
                     text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
                     text_x = x - text_size[0] // 2
                     text_y = y + text_size[1] // 2
-                    
+                            
                     # Draw the number in white
                     cv2.putText(image, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness)
             if is_pil:
@@ -257,3 +261,61 @@ class UserRGBDSet(UserInput):
             point_labeled_image_list.append(image)
         
         return point_labeled_image_list,points_coord_list
+
+    
+    def draw_vertical_lines_with_numbers(self,image, sections=8):
+        is_pil = not isinstance(image, np.ndarray)
+        if is_pil:
+            image = np.asarray(image)
+        
+        # Downsample the image to 720p resolution
+        image = cv2.resize(image, (1280, 720))
+        
+        height, width, _ = image.shape
+        
+        # Calculate the width of each section
+        section_width = width // sections
+        
+        # Load a larger font
+        font_scale = 5.0  # Adjust this value as needed
+        font_thickness = 3  # Adjust this value as needed
+        font = cv2.FONT_HERSHEY_TRIPLEX
+        
+        for i in range(sections):
+            x = i * section_width
+            
+            # Draw thicker red vertical line
+            cv2.line(image, (x, 0), (x, height), (0, 0, 255), 4)
+            
+            # Calculate the center of the section for the number
+            center_x = x + section_width // 2
+            
+            # Prepare the number text
+            text = str(i + 1)
+            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+            
+            # Draw black background for the number at the top
+            top_rect_start = (center_x - text_width // 2 - 10, 10)
+            top_rect_end = (center_x + text_width // 2 + 10, text_height + 20)
+            cv2.rectangle(image, top_rect_start, top_rect_end, (0, 0, 0), -1)
+            
+            # Draw the number in white at the top
+            top_text_x = center_x - text_width // 2
+            top_text_y = text_height + 10
+            cv2.putText(image, text, (top_text_x, top_text_y), font, font_scale, (255, 255, 255), font_thickness)
+            
+            # Draw black background for the number at the bottom
+            bottom_rect_start = (center_x - text_width // 2 - 10, height - text_height - 20)
+            bottom_rect_end = (center_x + text_width // 2 + 10, height - 10)
+            cv2.rectangle(image, bottom_rect_start, bottom_rect_end, (0, 0, 0), -1)
+            
+            # Draw the number in white at the bottom
+            bottom_text_x = center_x - text_width // 2
+            bottom_text_y = height - 10
+            cv2.putText(image, text, (bottom_text_x, bottom_text_y), font, font_scale, (255, 255, 255), font_thickness)
+        
+        if is_pil:
+            image = Image.fromarray(image)
+        
+        return image
+

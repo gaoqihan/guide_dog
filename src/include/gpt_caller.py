@@ -7,6 +7,9 @@ import os
 import re
 import shutil
 import time
+from PIL import Image
+import io
+
 class GPTCaller:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -20,36 +23,39 @@ class GPTCaller:
         # Create a new empty directory
         os.makedirs(directory, exist_ok=True)
 
-    def encode_image(self,image):
-        if type(image) == str:
-            with open(image, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode('utf-8')
+    def encode_image(self, image):
+        if not isinstance(image, Image.Image):
+           print("Image must be PIL image")
         else:
-            directory="./tmp/temp"
+            '''
+            directory = "./tmp/temp"
             extension = ".png"
 
             files = os.listdir(directory)
-            
+
             # Filter files based on the pattern 'temp<number>.png'
             pattern = re.compile(rf"^(\d+){extension}$")
             indices = [int(pattern.match(f).group(1)) for f in files if pattern.match(f)]
-            
+
             # Determine the next index
             if indices:
                 next_index = max(indices) + 1
             else:
                 next_index = 0
-            
+
             # Construct the new file name
             new_file_name = f"{next_index}{extension}"
             new_file_path = os.path.join(directory, new_file_name)
-            
+
             # Save the image
             image.save(new_file_path)
-            
+
             # Return the encoded image or the path, as needed
             return self.encode_image(new_file_path)
-
+            '''
+            buffered = io.BytesIO()
+            image.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode('utf-8')
     def create_prompt(self, user_prompt_list=[],system_prompt_list=[],response_format=None):
         messages = []
         content=[]
