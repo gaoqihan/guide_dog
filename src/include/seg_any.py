@@ -65,23 +65,33 @@ class SegAny:
 
         return self.predictor.set_image(self.image)
     
-    def get_mask(self):
+    def get_mask(self,bbox=None):
         if self.model=="default":
             #self.input_point = np.array([[self.image.shape[1] // 2, self.image.shape[0] // 2]])
             
             self.input_point = np.array([
                 [0, 0],
                 [self.image.shape[1]-1, self.image.shape[0]-1]
-            ])            
+            ])   
+            
+            if bbox is None:
+                bbox=np.array([0, 0, self.image.shape[1]-1, self.image.shape[0]-1])
+            else:
+                bbox = np.array(bbox)
             self.input_label = np.array([2,3])
-            self.masks, self.scores, self.logit = self.predictor.predict(
-                point_coords=self.input_point,
-                point_labels=self.input_label,
-                multimask_output=True,
+            #self.masks, self.scores, self.logit = self.predictor.predict(
+            #    point_coords=self.input_point,
+            #    point_labels=self.input_label,
+            #    multimask_output=True,
+            #)
+            self.masks, self.scores, self.logit =  self.predictor.predict(
+                box=bbox,
+                multimask_output=False
             )
 
-            highest_score_mask = self.masks[np.argmax(self.scores)]
-            torch.cuda.empty_cache()
+            #highest_score_mask = self.masks[np.argmax(self.scores)]
+            highest_score_mask = self.masks[0]
+            #torch.cuda.empty_cache()
             return highest_score_mask
         elif self.model=="nano":
             self.bbox = [0, 0, 850, 759]

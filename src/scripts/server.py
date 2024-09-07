@@ -37,7 +37,7 @@ sys.path.append(include_dir)  # Add 'include' directory to sys.path
 from user_input_manager import UserInputManager, UserInput, UserAudio, UserVideo, UserRGBDSet
 from gpt_caller import GPTCaller
 from seg_any import SegAny
-from depth_to_3d import get3d_bbox,get3d_point,MapBridge
+from depth_to_3d import get3d_mask,get3d_point,MapBridge
 from utils import extract_number_from_brackets
 from owl_detector import Detector
 from nanosam.mobile_sam.automatic_mask_generator import SamAutomaticMaskGenerator
@@ -62,7 +62,7 @@ class UserInputManagerServer(object):
         #print("UserInputManager Initialized")
         self.detector = Detector(model="nano")
         print("Detector Initialized")
-        self.seg_any=SegAny(model="nano")
+        self.seg_any=SegAny(model="default")
         print("Server started")
     def get_info(self,data):
         global info
@@ -104,8 +104,8 @@ class UserInputManagerServer(object):
         caller=GPTCaller()
         detector_enabled=True
         #sam_enabled=True
-        sam_enabled=False
-        point_grid_enabled=False
+        sam_enabled=True
+        point_grid_enabled=True
         look_around=True
         if look_around:
             with open('./prompts/distillation/rotation_and_distillation', 'r') as file:
@@ -191,14 +191,7 @@ class UserInputManagerServer(object):
                     continue
                 selection_range="choose from following numbers"+str(range(len(bbox_list_list[i])))
                 user_prompt_list=[user_prompt,selection_range,labeled_image_list[i]]
-                #test_pic_path=f"./tmp/bbox_image.png"
-                #test_pic = Image.open(test_pic_path)
-                #test_pic=caller.encode_image(test_pic_path)
-                #user_prompt=f"Task is : find an empty chair to sit down"
-                #user_prompt_list=[user_prompt,selection_range,test_pic]
-                #for j in range(len(prompt_image[i])):
-                #    user_prompt_list.append(f"{j}: ")
-                #    user_prompt_list.append(prompt_image[i][j])
+
                 caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
                 gpt_response=caller.call(model="gpt-4o-2024-08-06")
                 print(f"gpt response is {gpt_response}")
@@ -215,56 +208,36 @@ class UserInputManagerServer(object):
 
                     continue
 
-                try:
-                    x1, y1, x2, y2 = tuple(bbox_list_list[i][int(response)])
-                    x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-                    print(f"bounding box is {x1,y1,x2,y2}")
-                    # Cap the x2 and y2 values at the image's width and height
-                    x1 = max(x1, 0)
-                    y1 = max(y1, 0)
-                    x2 = min(x2, rgbd_set.data[i][0].width)
-                    y2 = min(y2, rgbd_set.data[i][0].height)
-                    cropped_image=rgbd_set.data[i][0].crop((x1,y1,x2,y2))
-                            #get segmentation mask
-                    self.seg_any.encode(cropped_image)
+                x1, y1, x2, y2 = tuple(bbox_list_list[i][int(response)])
+                x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
+                print(f"bounding box is {x1,y1,x2,y2}")
+                # Cap the x2 and y2 values at the image's width and height
+                x1 = max(x1, 0)
+                y1 = max(y1, 0)
+                x2 = min(x2, rgbd_set.data[i][0].width)
+                y2 = min(y2, rgbd_set.data[i][0].height)
+                        #get segmentation mask
+                self.seg_any.encode(rgbd_set.data[i][0])
 
-                    mask=self.seg_any.get_mask()
-                    #save the masked cropped image in /tem/masked
-                    os.makedirs("./tmp/masked", exist_ok=True)
-                    self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")
-                    number_of_true = np.sum(mask)
-            
-                    #get depth point
-                    image=rgbd_set.data[i][1]
+                mask=self.seg_any.get_mask(bbox=(x1,y1,x2,y2))
+                #save the masked cropped image in /tem/masked
+                os.makedirs("./tmp/masked", exist_ok=True)
+                self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")            
+                #get depth point
+                
+                best_rel_point=get3d_mask(rgbd_set.data[i][1],mask,info,i)
+                print("best rel point = ", best_rel_point)
+                print(f"the {owl_keyword} is at {best_rel_point}")
+                
 
-                    #rel_points=get3d_bbox(image,(x1,y1,x2,y2),info,i)
-                    #masked_rel_points=mask[:,:,np.newaxis]*rel_points
-                    #sum_result=np.sum(masked_rel_points, axis=(0, 1))
-                    #best_rel_point=sum_result/number_of_true
+                print(f"frame {i} took {time()-start_time} seconds")
 
-                    best_rel_point = get3d_point(image, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)), info, i)
-                    print("best rel point = ", best_rel_point, (int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0)))
-
-                    print(f"the {owl_keyword} is at {best_rel_point},pixel cordinante is {(int((x1+x2)*0.5), int(y1+(y2-y1)*1.0/4.0))}")
-                    draw = ImageDraw.Draw(labeled_image_list[0])
-                    draw.ellipse(
-                        [
-                            (int((x1 + x2) * 0.5) - 5, int(y1 + (y2 - y1) * 1.0 / 4.0) - 5),
-                            (int((x1 + x2) * 0.5) + 5, int(y1 + (y2 - y1) * 1.0 / 4.0) + 5)
-                        ],
-                        outline="green",
-                        width=2
-                    )
-                    print(f"frame {i} took {time()-start_time} seconds")
-
-                    
-                    break
-                except:
-                    print(f"gpt error in frame {i}")
-                    continue
+                
+                break
+                
         #Method2 SAM detector:
         if sam_enabled:
-            if best_rel_point is None:
+            if best_rel_point is None or best_rel_point is not None:
                 print("no object detected by owl detector, trying SAM detector")
                 sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
                 with open('./prompts/visual_selector/sam_points', 'r') as file:
@@ -281,18 +254,33 @@ class UserInputManagerServer(object):
                     result_dict = json.loads(response)
                     if result_dict["final_decision"]!="-1":
                         best_pixel=point_list[int(result_dict["final_decision"])]
-                        best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        # Get a square bounding box around the best pixel
+                        bbox_size = 50  # Adjust the size of the bounding box as needed
+                        x = best_pixel[0]
+                        y = best_pixel[1]
+                        x1 = max(x - bbox_size // 2, 0)
+                        y1 = max(y - bbox_size // 2, 0)
+                        x2 = min(x + bbox_size // 2, rgbd_set.data[i][0].width)
+                        y2 = min(y + bbox_size // 2, rgbd_set.data[i][0].height)
+                        self.seg_any.encode(rgbd_set.data[i][0])
+
+                        mask=self.seg_any.get_mask(bbox=(x1,y1,x2,y2))
+                        
+                        
+                        #best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        best_rel_point=get3d_mask(rgbd_set.data[i][1],mask,info,i)
+
                         break
                     else:
                         print(f"target not found in frame {i} with point sam")   
         # Grid points
         if point_grid_enabled:
-            if best_rel_point is None:
+            if best_rel_point is None or best_rel_point is not None:
                 print("no object detected by SAM detector, trying point grid")
                 #self.manager.add_new_input(rgbd_set)
                 os.makedirs("./tmp/point_grid", exist_ok=True)
 
-                point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=128)
+                point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=100)
                 #point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=400)
                 with open('./prompts/visual_selector/point_grid', 'r') as file:
                     prompt_json = json.loads(file.read())
@@ -308,7 +296,18 @@ class UserInputManagerServer(object):
                     result_dict = json.loads(response)
                     if result_dict["final_decision"]!="-1":
                         best_pixel=points_coord_list[int(result_dict["final_decision"])]
-                        best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        #best_rel_point=get3d_point(rgbd_set.data[i][1],best_pixel,info,i)
+                        bbox_size = 50  # Adjust the size of the bounding box as needed
+                        x = best_pixel[0]
+                        y = best_pixel[1]
+                        x1 = max(x - bbox_size // 2, 0)
+                        y1 = max(y - bbox_size // 2, 0)
+                        x2 = min(x + bbox_size // 2, rgbd_set.data[i][0].width)
+                        y2 = min(y + bbox_size // 2, rgbd_set.data[i][0].height)
+                        self.seg_any.encode(rgbd_set.data[i][0])
+
+                        mask=self.seg_any.get_mask(bbox=(x1,y1,x2,y2))
+                        best_rel_point=get3d_mask(rgbd_set.data[i][1],mask,info,i)
                         break
                     else:
                         print(f"target not found in frame {i} with point grid")   
@@ -343,7 +342,7 @@ class UserInputManagerServer(object):
                 
                 self.goal_pub.publish(pose)
             #this needs to be changed, its not always owl_keypoint[0]. instead ask gpt to clarify what object it selected
-            add_to_permanant_map(owl_keyword[0],pose)
+            add_to_permanant_map(result_dict["object_name"],pose)
             '''
             print("Done publishing goal")
             #result.success = True

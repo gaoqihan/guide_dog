@@ -206,7 +206,7 @@ class UserRGBDSet(UserInput):
             break #takes too long, only do once
         return labeled_image_list,point_list
         
-    
+        
     def point_grid_label(self, points_num=32):
         is_pil = not isinstance(self.data[0][0], np.ndarray)
 
@@ -221,7 +221,6 @@ class UserRGBDSet(UserInput):
                 image = np.asarray(image)
             height, width, _ = image.shape
 
-    
             # Determine the number of rows and columns for the grid based on the aspect ratio
             aspect_ratio = width / height
             grid_cols = int((points_num * aspect_ratio) ** 0.5)
@@ -231,11 +230,12 @@ class UserRGBDSet(UserInput):
             font_scale = 0.5  # Adjust this value as needed
             font_thickness = 1  # Adjust this value as needed
             font = cv2.FONT_HERSHEY_TRIPLEX
-              # Calculate coordinates for grid points
+            
+            # Calculate coordinates for grid points
             for i in range(grid_rows):
                 for j in range(grid_cols):
                     x = int((j + 0.5) * width / grid_cols)
-                    y = int((i + 0.5) * height / grid_rows)
+                    y = int((i + 0.5) * height / grid_rows * 0.6 + height * 0.4)  # Adjust y to be in the lower 60%
                     points_coord_list.append((x, y))
                     text = str(i * grid_cols + j)
                     (text_width, text_height), baseline = cv2.getTextSize(
@@ -260,9 +260,8 @@ class UserRGBDSet(UserInput):
                 image = Image.fromarray(image)
             point_labeled_image_list.append(image)
         
-        return point_labeled_image_list,points_coord_list
-
-    
+        return point_labeled_image_list, points_coord_list
+        
     def draw_vertical_lines_with_numbers(self,image, sections=8):
         is_pil = not isinstance(image, np.ndarray)
         if is_pil:

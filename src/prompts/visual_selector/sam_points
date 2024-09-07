@@ -9,25 +9,25 @@
           "schema": {
             "type": "object",
             "properties": {
-              "existence_check":{
-                "type": "string",
-                "description": "The existence of the object in the image. If present return True If the object is not present, answer should be False"
-
-              },
               "reasoning_steps": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 },
-                "description": "The reason three best  candidates numbers is selected or not selected.Reason about each number on why or why not it is selected, describe the location of the object in the picture and the color of the object,then you MUST give a confidence score for each of the best candidate points range from 0 to 10 (0 being lowest). If there is no good candidate, you can select -1. if existence_check is -1, you can just return -1."
+                "description": "The reason best  candidates numbers is selected or not selected.Reason about each number on why or why not it is selected, describe the location of the object in the picture and the color of the object,then you MUST give a confidence score for each of the best candidate points range from 0 to 10 (0 being lowest). If there is no good candidate, you can select -1. if existence_check is -1, you can just return -1."
               },
     
               "final_decision": {
                 "type": "string",
                 "description": "You MUST only answer the selected number. if none of number is desirable, answer shoueld be -1"
+              },
+              
+              "object_name": {
+                "type": "string",
+                "description": "You need to return the name of the object that you have selected."
               }
             },
-            "required": ["existence_check","reasoning_steps", "final_decision"],
+            "required": ["reasoning_steps", "final_decision","object_name"],
             "additionalProperties": false
           }
         }

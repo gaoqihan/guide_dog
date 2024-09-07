@@ -9,47 +9,31 @@ import matplotlib.pyplot as plt
 import shutil
 
 
-def get3d_bbox(image,bounding_box,info,index):
+def get3d_mask(image,mask,info,index):
     bridge = CvBridge()
     cam_model = image_geometry.PinholeCameraModel()
-    x1, y1, x2, y2= bounding_box
-    #d_ref=image[y2,x2]
-    
-    d = image[y1:y2, x1:x2]
-    
-    print(image.shape,d.shape)
-    os.makedirs("./tmp/cropped_depth", exist_ok=True)
-    plt.figure(figsize=(10,10))
-    plt.imshow(d, cmap='viridis')
-    plt.axis('off')
-    #plt.show() 
-
-
-    plt.savefig(f"./tmp/cropped_depth/{str(index)}.png")
-    plt.figure(figsize=(10,10))
-    plt.imshow(image, cmap='viridis')
-    plt.axis('off')
-    #plt.show() 
-
+    #d_ref=image[y2,x2]    
 
     plt.savefig(f"./tmp/cropped_depth/{str(index)}_original.png")    
-    
-    d_ref=image[int((y2-y1)/2+y1), int((x2-x1)/2+x1)]
 
-    real_z = image[int((y2-y1)/2+y1), int((x2-x1)/2+x1)] * 0.001
     cam_model.fromCameraInfo(info)
-    uv1 = (x1, y1)
-    uv2 = (x2, y2)
 
-    u_range = numpy.arange(uv1[0], uv2[0])
-    v_range = numpy.arange(uv1[1], uv2[1])
-    u_mesh, v_mesh = numpy.meshgrid(u_range, v_range)
+    height, width = image.shape[:2]
 
-    real_z = image[y1:y2, x1:x2] * 0.001
+    # Create meshgrid
+    u_mesh, v_mesh = np.meshgrid(np.arange(width), np.arange(height))
+
+    real_z = image * 0.001
     x_mesh=(u_mesh-cam_model.cx())/cam_model.fx()*real_z
     y_mesh=(v_mesh-cam_model.cy())/cam_model.fy()*real_z
     point_cloud=numpy.stack((x_mesh, y_mesh, real_z), axis=-1)
-    return point_cloud
+    
+    
+    masked_rel_points=mask[:,:,np.newaxis]*point_cloud
+    sum_result=np.sum(masked_rel_points, axis=(0, 1))
+    best_rel_point=sum_result/np.sum(mask)    
+
+    return best_rel_point
 
 
 

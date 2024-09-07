@@ -23,9 +23,13 @@
                 "final_decision": {
                 "type": "string",
                 "description": "You MUST only answer the selected number.if none of object is desirable, answer shoueld be -1"
+              },
+              "object_name": {
+                "type": "string",
+                "description": "You need to return the name of the object that you have selected."
               }
             },
-            "required": ["reasoning_steps", "final_decision"],
+            "required": ["reasoning_steps", "final_decision, object_name"],
             "additionalProperties": false
           }
         }

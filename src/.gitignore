@@ -6,3 +6,5 @@ temp.png
 /src/tmp
 /tmp
 /log
+/include/__pycache__
+/images
