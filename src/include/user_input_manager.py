@@ -22,7 +22,7 @@ class UserInputManager:
     def __init__(self,model="default"):
         self.model=model
         self.content=[]
-        self.audio_model = whisper.load_model("base")
+        #self.audio_model = whisper.load_model("base")
         self.detector = Detector(model=self.model)
     def add_new_input(self,user_input):
         self.assign_id(user_input)
