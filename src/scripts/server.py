@@ -51,9 +51,11 @@ class UserInputManagerServer(object):
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         rospy.Subscriber('/find_object', String,self.object_finder_text)
+        rospy.Subscriber('/describe_environment', String,self.describe_environment)
+        self.describe_environment_complete_publisher=rospy.Publisher("/describe_environment_complete",String,queue_size=10)
         self.add_to_semantic_map_publisher=rospy.Publisher("/add_to_semantic_map", PoseStamped, queue_size=10)
-        #self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
-        self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
+        self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
+        #self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
         #self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
 
         self.map_bridge=MapBridge()
@@ -63,17 +65,30 @@ class UserInputManagerServer(object):
         self.detector = Detector(model="nano")
         print("Detector Initialized")
         self.seg_any=SegAny(model="default")
+        self.caller=GPTCaller()
+
         print("Server started")
     def get_info(self,data):
         global info
         info = data
         
     def condition_checker(self,prompt):
-        caller=GPTCaller()
+        print("checking condition")
         
+    def describe_environment(self,msg):
+        direction=msg.data
+        #update this after install 360 camera
+        direction="front"
+        system_prompt="Your task is to provide a description of the environment in front of you based on the image provided. Please provide detaild and clear description in less than 150 words"
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'p'])  # Use sys.executable
 
-        
-    
+        image=Image.open("./tmp/color/0.png")
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])  # Use sys.executable
+
+        self.caller.create_prompt([image],system_prompt_list=[system_prompt])
+        response=self.caller.call(model="chatgpt-4o-latest")
+        self.describe_environment_complete_publisher.publish(response)
+        return
     #def object_finder(self, goal):
 
     #    self.task=goal.task
@@ -101,7 +116,6 @@ class UserInputManagerServer(object):
         x1,x2,y1,y2=None,None,None,None
         best_rel_point=None
 
-        caller=GPTCaller()
         detector_enabled=True
         #sam_enabled=True
         sam_enabled=True
@@ -119,8 +133,8 @@ class UserInputManagerServer(object):
             #end
             labeled_360_image=rgbd_set.draw_vertical_lines_with_numbers(full_view_image)
             look_around_image_list.append(labeled_360_image)
-            caller.create_prompt([user_prompt,labeled_360_image],system_prompt_list=[system_prompt],response_format=response_format)
-            response=caller.call(model="gpt-4o-2024-08-06")
+            self.caller.create_prompt([user_prompt,labeled_360_image],system_prompt_list=[system_prompt],response_format=response_format)
+            response=self.caller.call(model="gpt-4o-2024-08-06")
             gpt_answer_log+=response+"\n"
             result_dict = json.loads(response)
 
@@ -142,8 +156,8 @@ class UserInputManagerServer(object):
             response_format=prompt_json["response_format"]
             user_prompt=self.task
             raw_image=rgbd_set.data[0][0]
-            caller.create_prompt([user_prompt,raw_image],system_prompt_list=[system_prompt],response_format=response_format)
-            response=caller.call(model="gpt-4o-2024-08-06")
+            self.caller.create_prompt([user_prompt,raw_image],system_prompt_list=[system_prompt],response_format=response_format)
+            response=self.caller.call(model="gpt-4o-2024-08-06")
             gpt_answer_log+=response+"\n"
             result_dict = json.loads(response)
 
@@ -158,6 +172,7 @@ class UserInputManagerServer(object):
             detector_enabled=False
             sam_enabled=False
             point_grid_enabled=False
+        
 
         print(owl_keyword,gpt_keyword,existence_check)
         
@@ -192,19 +207,19 @@ class UserInputManagerServer(object):
                 selection_range="choose from following numbers"+str(range(len(bbox_list_list[i])))
                 user_prompt_list=[user_prompt,selection_range,labeled_image_list[i]]
 
-                caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
-                gpt_response=caller.call(model="gpt-4o-2024-08-06")
+                self.caller.create_prompt(user_prompt_list=user_prompt_list,system_prompt_list=[system_prompt],response_format=response_format)
+                gpt_response=self.caller.call(model="gpt-4o-2024-08-06")
                 print(f"gpt response is {gpt_response}")
                 gpt_answer_log+=gpt_response+"\n"
-
-                response = json.loads(gpt_response)["final_decision"]  
+                result_dict = json.loads(gpt_response)
+                response = result_dict["final_decision"]  
                 
                 print("time for gpt call is: ", time()-start_time)
                 #response=0
                 print(f"gpt selected bounding box is {response}")
                 if int(response)==-1:
                     print(f"target not found in frame {i}")
-                    print(f"frame {i} took {time()-start_time} seconds")
+                    print(f"OWL frame {i} took {time()-start_time} seconds")
 
                     continue
 
@@ -237,7 +252,8 @@ class UserInputManagerServer(object):
                 
         #Method2 SAM detector:
         if sam_enabled:
-            if best_rel_point is None or best_rel_point is not None:
+            start_time=time()
+            if best_rel_point is None:# or best_rel_point is not None:
                 print("no object detected by owl detector, trying SAM detector")
                 sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
                 with open('./prompts/visual_selector/sam_points', 'r') as file:
@@ -247,8 +263,8 @@ class UserInputManagerServer(object):
                 user_prompt=gpt_keyword
                 for i in range(len(sam_labeled_image_list)):
                     image=sam_labeled_image_list[i]
-                    caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
-                    response=caller.call(model="gpt-4o-2024-08-06")
+                    self.caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                    response=self.caller.call(model="gpt-4o-2024-08-06")
                     gpt_answer_log+=response+"\n"
                     print(f"gpt response is {response}")
                     result_dict = json.loads(response)
@@ -273,9 +289,11 @@ class UserInputManagerServer(object):
                         break
                     else:
                         print(f"target not found in frame {i} with point sam")   
+            print("time for sam is: ", time()-start_time)       
         # Grid points
         if point_grid_enabled:
-            if best_rel_point is None or best_rel_point is not None:
+            start_time=time()
+            if best_rel_point is None:# or best_rel_point is not None:
                 print("no object detected by SAM detector, trying point grid")
                 #self.manager.add_new_input(rgbd_set)
                 os.makedirs("./tmp/point_grid", exist_ok=True)
@@ -289,8 +307,8 @@ class UserInputManagerServer(object):
                 user_prompt=gpt_keyword
                 for i in range(len(point_grid_image_list)):
                     image=point_grid_image_list[i]
-                    caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
-                    response=caller.call(model="gpt-4o-2024-08-06")
+                    self.caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
+                    response=self.caller.call(model="gpt-4o-2024-08-06")
                     gpt_answer_log+=response+"\n"
                     print(f"gpt response is {response}")
                     result_dict = json.loads(response)
@@ -311,11 +329,11 @@ class UserInputManagerServer(object):
                         break
                     else:
                         print(f"target not found in frame {i} with point grid")   
+            print("time for point grid is: ", time()-start_time)
         #save the package
         save_package(rgbd_set, labeled_image_list=labeled_image_list, alter_labeled_image_lists=alter_labeled_image_lists, bbox_list_list=bbox_list_list, point_grid_image_list=point_grid_image_list, sam_labeled_image_list=sam_labeled_image_list, look_around_image_list=look_around_image_list, gpt_log=gpt_answer_log)
     
         if best_rel_point is not None:
-            '''
             best_rel_point[2]=best_rel_point[2]
             print(best_rel_point)
             #self.rel_pos_publisher.publish(Float32(best_rel_point[2]))
@@ -324,7 +342,8 @@ class UserInputManagerServer(object):
             object_position_in_map=self.map_bridge.get_object_position_in_map(best_rel_point[0],best_rel_point[1],best_rel_point[2],1)
             print(f"best point is {object_position_in_map}")
             
-
+            #remove this when onboard
+            object_position_in_map=[27,15,0]
             self.map_bridge.publish_markers([object_position_in_map])
             pose=PoseStamped()
             pose.header.frame_id = "map"
@@ -342,15 +361,13 @@ class UserInputManagerServer(object):
                 
                 self.goal_pub.publish(pose)
             #this needs to be changed, its not always owl_keypoint[0]. instead ask gpt to clarify what object it selected
-            add_to_permanant_map(result_dict["object_name"],pose)
-            '''
+            self.add_to_permanant_map(result_dict["object_name"],pose)
             print("Done publishing goal")
             #result.success = True
             #result.message = "Completed"
             
         
         else:
-            '''
             pose=PoseStamped()
             pose.header.frame_id = "map"
 
@@ -366,7 +383,6 @@ class UserInputManagerServer(object):
             for i in range(5):
                
                 self.goal_pub.publish(pose)
-            '''
             print('No object detected')
             #self.rel_pos_publisher.publish(int(-1))
 
@@ -376,18 +392,17 @@ class UserInputManagerServer(object):
         subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])
     
     def add_to_permanant_map(self,object,pose_stamped):
-        caller=GPTCaller()
-
-        with open('./prompts/map_processing/add_semantic _point_to_map', 'r') as file:
+        print(f"adding {object} to permanant map")
+        with open('./prompts/map_processing/add_semantic_point_to_map', 'r') as file:
             prompt_json = json.loads(file.read())
         system_prompt=prompt_json["system_prompt"]
-        response_format=[prompt_json["response_format"]]
-        user_prompt="the object is a "+object,"is the object a permanent object or a moveable object?"
+        response_format=prompt_json["response_format"]
+        user_prompt="the object is a "+object+"is the object a permanent object or a moveable object?"
 
         self.caller.create_prompt([user_prompt],system_prompt_list=[system_prompt],response_format=response_format)
-        response=caller.call(model="gpt-4o-2024-08-06")
+        response=self.caller.call(model="gpt-4o-2024-08-06")
         self.add_to_semantic_map_publisher.publish(pose_stamped)
-        print(f"gpt response is {response}")
+        print(f"gpt response for permanant map is {response}")
     
         
     def rotate_to_direction(self,direction):

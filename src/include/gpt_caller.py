@@ -110,12 +110,17 @@ class GPTCaller:
             messages=self.messages,temperature=temperature,
             )
         else:
-            completion = self.client.chat.completions.create(
-            model=model,
-            messages=self.messages,temperature=temperature,
-            response_format=self.response_format
-            
-            )
+            if self.response_format is not None:
+                completion = self.client.chat.completions.create(
+                model=model,
+                messages=self.messages,temperature=temperature,
+                response_format=self.response_format
+                )
+            else:
+                completion = self.client.chat.completions.create(
+                model=model,
+                messages=self.messages,temperature=temperature,
+                )
 
         #print(completion.choices[0].message)
         print(f"GPT call time taken: {time.time()-start_time:.2f} seconds")

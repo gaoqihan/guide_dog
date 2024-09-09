@@ -29,7 +29,7 @@
                 "description": "You need to return the name of the object that you have selected."
               }
             },
-            "required": ["reasoning_steps", "final_decision, object_name"],
+            "required": ["reasoning_steps", "final_decision","object_name"],
             "additionalProperties": false
           }
         }
