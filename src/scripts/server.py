@@ -19,7 +19,7 @@ from std_msgs.msg import Float32, String
 from dotenv import load_dotenv
 import os
 from PIL import ImageDraw
-
+import argparse
 # Load environment variables from .env file
 load_dotenv()
 
@@ -45,9 +45,10 @@ from nanosam.mobile_sam.build_sam import sam_model_registry
 #from nanosam.mobile_sam.predictor import SamPredictor
 import torch
 class UserInputManagerServer(object):
-    def __init__(self):
+    def __init__(self,args):
         #self.action_server = actionlib.SimpleActionServer('visual_locator_action', ObjectDetectorAction, self.object_finder, False)
         #self.action_server.start()
+        self.args=args
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         rospy.Subscriber('/find_object', String,self.object_finder_text)
@@ -63,7 +64,7 @@ class UserInputManagerServer(object):
         self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
         #self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
         #self.rel_pos_publisher=rospy.Publisher("/rel_pos",Float32,queue_size=10)
-
+        self.speak_to_user_publisher=rospy.Publisher('/speak_to_user', String, queue_size=10)
         self.map_bridge=MapBridge()
         
         #self.manager=UserInputManager(model="nano")
@@ -72,7 +73,7 @@ class UserInputManagerServer(object):
         print("Detector Initialized")
         self.seg_any=SegAny(model="default")
         self.caller=GPTCaller()
-
+        
         print("Server started")
     def get_info(self,data):
         global info
@@ -148,15 +149,19 @@ class UserInputManagerServer(object):
         look_around_image_list=[]
         x1,x2,y1,y2=None,None,None,None
         best_rel_point=None
-
-        detector_enabled=True
+        onboard=self.args.onboard
+        detector_enabled=not self.args.disable_owl
         #sam_enabled=True
-        sam_enabled=True
-        point_grid_enabled=True
+        sam_enabled=not self.args.disable_sam
+        point_grid_enabled=not self.args.disable_point_grid
         look_around=True
         if look_around:
-            with open('./prompts/distillation/rotation_and_distillation', 'r') as file:
-                prompt_json = json.loads(file.read())
+            if onboard:
+                with open('./prompts/distillation_onboard/rotation_and_distillation', 'r') as file:
+                    prompt_json = json.loads(file.read())           
+            else:
+                with open('./prompts/distillation/rotation_and_distillation', 'r') as file:
+                    prompt_json = json.loads(file.read())
             system_prompt=prompt_json["system_prompt"]
             response_format=prompt_json["response_format"]
             user_prompt=self.task
@@ -182,9 +187,12 @@ class UserInputManagerServer(object):
             
         else:
         #distill the task thruough gpt
-
-            with open('./prompts/distillation/prompt', 'r') as file:
-                prompt_json = json.loads(file.read())
+            if onboard:
+                with open('./prompts/distillation_onboard/prompt', 'r') as file:
+                    prompt_json = json.loads(file.read())           
+            else:
+                with open('./prompts/distillation/prompt', 'r') as file:
+                    prompt_json = json.loads(file.read())
             system_prompt=prompt_json["system_prompt"]
             response_format=prompt_json["response_format"]
             user_prompt=self.task
@@ -205,6 +213,14 @@ class UserInputManagerServer(object):
             detector_enabled=False
             sam_enabled=False
             point_grid_enabled=False
+            speech="I am sorry, I am not able to find the object you are looking for"
+            speech=String(speech)
+            self.speak_to_user_publisher(speech)
+            rospy.sleep(5)
+        else:
+            speech="I found what you want infront of us, I will now try to get its location"
+            speech=String(speech)
+            self.speak_to_user_publisher(speech)
         
 
         print(owl_keyword,gpt_keyword,existence_check)
@@ -215,9 +231,12 @@ class UserInputManagerServer(object):
 
             #get bounding boxes through owl
             bbox_list_list,labeled_image_list,alter_labeled_image_lists=rgbd_set.detect_objects(self.detector,owl_keyword)
-            
-            with open('./prompts/visual_selector/given_points', 'r') as file:
-                prompt_json = json.loads(file.read())
+            if onboard:
+                with open('./prompts/visual_selector_onboard/given_points', 'r') as file:
+                    prompt_json = json.loads(file.read())
+            else:
+                with open('./prompts/visual_selector/given_points', 'r') as file:
+                    prompt_json = json.loads(file.read())
             system_prompt=prompt_json["system_prompt"]
             response_format=prompt_json["response_format"]
             user_prompt=f"Task is : {gpt_keyword}"
@@ -288,9 +307,14 @@ class UserInputManagerServer(object):
             start_time=time()
             if best_rel_point is None:# or best_rel_point is not None:
                 print("no object detected by owl detector, trying SAM detector")
+                
                 sam_labeled_image_list,point_list=rgbd_set.seg_any_label(self.seg_any)
-                with open('./prompts/visual_selector/sam_points', 'r') as file:
-                    prompt_json = json.loads(file.read())
+                if onboard:
+                    with open('./prompts/visual_selector_onboard/sam_points', 'r') as file:
+                        prompt_json = json.loads(file.read())
+                else:
+                    with open('./prompts/visual_selector/sam_points', 'r') as file:
+                        prompt_json = json.loads(file.read())
                 system_prompt=prompt_json["system_prompt"]
                 response_format=prompt_json["response_format"]
                 user_prompt=gpt_keyword
@@ -333,8 +357,12 @@ class UserInputManagerServer(object):
 
                 point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=100)
                 #point_grid_image_list,points_coord_list=rgbd_set.point_grid_label(points_num=400)
-                with open('./prompts/visual_selector/point_grid', 'r') as file:
-                    prompt_json = json.loads(file.read())
+                if onboard:
+                    with open('./prompts/visual_selector_onboard/point_grid', 'r') as file:
+                        prompt_json = json.loads(file.read())
+                else:
+                    with open('./prompts/visual_selector/point_grid', 'r') as file:
+                        prompt_json = json.loads(file.read())
                 system_prompt=prompt_json["system_prompt"]
                 response_format=prompt_json["response_format"]
                 user_prompt=gpt_keyword
@@ -394,7 +422,7 @@ class UserInputManagerServer(object):
                 
                 self.goal_pub.publish(pose)
             #this needs to be changed, its not always owl_keypoint[0]. instead ask gpt to clarify what object it selected
-            self.add_to_permanant_map(result_dict["object_name"],pose)
+            #self.add_to_permanant_map(result_dict["object_name"],pose)
             print("Done publishing goal")
             #result.success = True
             #result.message = "Completed"
@@ -519,6 +547,20 @@ def save_package(rgbd_set, bbox_list_list=[], labeled_image_list=[], alter_label
 
 
 if __name__ == '__main__':
+    # Create the parser
+    parser = argparse.ArgumentParser(description='Description of your program')
+    
+    # Add arguments
+    parser.add_argument('--onboard', action='store_true', help='if set to True, enables onboard mode')
+    parser.add_argument('--disable_owl', action='store_true', help='if set to True, disables owl detector')
+    parser.add_argument('--disable_sam', action='store_true', help='if set to True, disables sam detector')
+    parser.add_argument('--disable_point_grid', action='store_true', help='if set to True, disables point grid detector')
+    
+    # Parse the arguments
+    args = parser.parse_args()
+    
+
+
     rospy.init_node('detector_server')
-    server = UserInputManagerServer()
+    server = UserInputManagerServer(args)
     rospy.spin()

@@ -1,0 +1,47 @@
+
+{
+  "system_prompt":"You are an AI assistant, your task is to help me extract key word and instruction from a long instruction for guiding blind person. ",
+  
+  "response_format":{
+      "type": "json_schema",
+      "json_schema": {
+        "name": "reasoning_schema",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "reasoning_steps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The reasoning steps leading to the final conclusion."
+            },
+            "keyword": {
+              "type": "array",
+              "items": {
+                  "type": "string"
+                },
+                  "description": "The key object of needed to be found based on instruction. The keyword MUST be simple non-abstract object,it must be well-defined and common (e.g. car, mouse, apple, keyboard, traffic light)!!! It MUST be easy to detect with computer vision algorithms.You can infer what the keyword is based on the intention of the instruction. The list can contain multiple key objects, as long as they are related to the instruction."
+              },
+  
+  
+            "key_instruction": {
+              "type": "string",
+              "description": "The instruction is for guiding a blind person. You must use common sense and social rule to build this instruction.The instruction contains a summrized instruction for the AI to find object based on original instruction given and the image provided, and some conditions for the object."
+            },
+            "existence_check":{
+              "type": "string",
+              "description": "The existence of the object in the instruction. If the object is not present, answer should be False, otherwise True"
+  
+            }
+          },
+
+          "required": ["reasoning_steps", "keyword","key_instruction","existence_check"],
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+  
+  

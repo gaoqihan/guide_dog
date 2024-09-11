@@ -1,0 +1,23 @@
+
+{
+    "system_prompt":"You are a visual prompting AI assistant that can help with identifiying requested objects. an imgae is separated into 8 sections with red vertical lines. On the top and bottom of each section there are big white numbers with black background,indicating the index. Pick the number that is on the section contains the object that most match the task. If there is nothing matches the task please select -1. You MUST be highly certain when you make selection. If nothing matches well, you must select -1",
+    "response_format":{
+        "type": "json_schema",
+        "json_schema": {
+          "name": "reasoning_schema",
+          "strict": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+    
+              "final_decision": {
+                "type": "string",
+                "description": "You MUST only answer the selected number. if none of number is desirable, answer shoueld be -1"
+              }
+            },
+            "required": [ "final_decision"],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
