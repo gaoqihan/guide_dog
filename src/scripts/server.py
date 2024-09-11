@@ -52,7 +52,13 @@ class UserInputManagerServer(object):
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
         rospy.Subscriber('/find_object', String,self.object_finder_text)
         rospy.Subscriber('/describe_environment', String,self.describe_environment)
+        rospy.Subscriber('/describe_object', String,self.describe_object)
+        rospy.Subscriber('/read', String,self.read)
+
         self.describe_environment_complete_publisher=rospy.Publisher("/describe_environment_complete",String,queue_size=10)
+        self.describe_object_complete_publisher=rospy.Publisher("/describe_object_complete",String,queue_size=10)
+        self.read_complete_publisher=rospy.Publisher("/read_complete",String,queue_size=10)
+
         self.add_to_semantic_map_publisher=rospy.Publisher("/add_to_semantic_map", PoseStamped, queue_size=10)
         self.goal_pub = rospy.Publisher("/best_goal", PoseStamped, queue_size=10)
         #self.goal_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
@@ -88,6 +94,33 @@ class UserInputManagerServer(object):
         self.caller.create_prompt([image],system_prompt_list=[system_prompt])
         response=self.caller.call(model="chatgpt-4o-latest")
         self.describe_environment_complete_publisher.publish(response)
+        return
+    
+    def describe_object(self,msg):
+        object_name=msg.data
+        #update this after install 360 camera
+        system_prompt="Your task is to provide a description of an object in the image based on the image provided. Please provide detaild and clear description in less than 150 words"
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'p'])  # Use sys.executable
+
+        image=Image.open("./tmp/color/0.png")
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])  # Use sys.executable
+        user_promt_list=['Please describe'+object_name,image]
+        self.caller.create_prompt(user_promt_list=user_promt_list,system_prompt_list=[system_prompt])
+        response=self.caller.call(model="chatgpt-4o-latest")
+        self.describe_object_complete_publisher.publish(response)
+        return
+    def read(self,msg):
+        object_name=msg.data
+        #update this after install 360 camera
+        system_prompt="Your task is to read the text on given object in the image based on the image provided. If you are not able to identify the text, please tell the user that the text is not clear or you can't see it"
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'p'])  # Use sys.executable
+
+        image=Image.open("./tmp/color/0.png")
+        subprocess.call([sys.executable, 'scripts/pause_resume_video.py', 'r'])  # Use sys.executable
+
+        self.caller.create_prompt(['Please describe'+object_name,image],system_prompt_list=[system_prompt])
+        response=self.caller.call(model="chatgpt-4o-latest")
+        self.read_complete_publisher.publish(response)
         return
     #def object_finder(self, goal):
 
@@ -343,7 +376,7 @@ class UserInputManagerServer(object):
             print(f"best point is {object_position_in_map}")
             
             #remove this when onboard
-            object_position_in_map=[27,15,0]
+            #object_position_in_map=[27,15,0]
             self.map_bridge.publish_markers([object_position_in_map])
             pose=PoseStamped()
             pose.header.frame_id = "map"
