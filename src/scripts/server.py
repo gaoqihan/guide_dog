@@ -53,7 +53,7 @@ class UserInputManagerServer(object):
         self.args=args
         print("action server started")
         rospy.Subscriber("/camera/aligned_depth_to_color/camera_info", CameraInfo, self.get_info)
-        rospy.Subscriber('/find_object', String,self.object_finder_text)
+        rospy.Subscriber('/find_object', String,self.object_finder)
         rospy.Subscriber('/describe_environment', String,self.describe_environment)
         rospy.Subscriber('/describe_object', String,self.describe_object)
         rospy.Subscriber('/read', String,self.read)
@@ -131,7 +131,7 @@ class UserInputManagerServer(object):
     #   self.object_finder_text()
         
         
-    def object_finder_text(self,msg):
+    def object_finder(self,msg):
         self.task=msg.data
         print(self.task)
         #rospy.loginfo("Video capture request received, processing...")
@@ -181,7 +181,7 @@ class UserInputManagerServer(object):
             #assume done
             owl_keyword=result_dict["keyword"]
             
-            gpt_keyword=result_dict["key_instruction"]
+            key_instruction=result_dict["key_instruction"]
             direction=result_dict["direction"]
             existence_check=result_dict["existence_check"]
 
@@ -207,7 +207,7 @@ class UserInputManagerServer(object):
             #assume done
             owl_keyword=result_dict["keyword"]
             
-            gpt_keyword=result_dict["key_instruction"]
+            key_instruction=result_dict["key_instruction"]
             existence_check=result_dict["existence_check"]
         
         
@@ -225,7 +225,7 @@ class UserInputManagerServer(object):
             self.speak_to_user_publisher.publish(speech)
         
 
-        print(owl_keyword,gpt_keyword,existence_check)
+        print(owl_keyword,key_instruction,existence_check)
         
 
         #Approach 1: Owl detector
@@ -241,7 +241,7 @@ class UserInputManagerServer(object):
                     prompt_json = json.loads(file.read())
             system_prompt=prompt_json["system_prompt"]
             response_format=prompt_json["response_format"]
-            user_prompt=f"Task is : {gpt_keyword}"
+            user_prompt=f"Task is : {key_instruction}"
 
             
             if os.path.exists("./tmp/cropped_depth"):
@@ -321,7 +321,7 @@ class UserInputManagerServer(object):
                         prompt_json = json.loads(file.read())
                 system_prompt=prompt_json["system_prompt"]
                 response_format=prompt_json["response_format"]
-                user_prompt=gpt_keyword
+                user_prompt=key_instruction
                 for i in range(len(sam_labeled_image_list)):
                     image=sam_labeled_image_list[i]
                     self.caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
@@ -369,7 +369,7 @@ class UserInputManagerServer(object):
                         prompt_json = json.loads(file.read())
                 system_prompt=prompt_json["system_prompt"]
                 response_format=prompt_json["response_format"]
-                user_prompt=gpt_keyword
+                user_prompt=key_instruction
                 for i in range(len(point_grid_image_list)):
                     image=point_grid_image_list[i]
                     self.caller.create_prompt([user_prompt,image],system_prompt_list=[system_prompt],response_format=response_format)
