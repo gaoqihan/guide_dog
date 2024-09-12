@@ -34,6 +34,7 @@ def show_box(box, ax):
 class SegAny:
     def __init__(self,model="defualt"):
         self.model=model
+        self.bbox=None
         if self.model=="default":
             sam_checkpoint = "./model/sam_vit_h_4b8939.pth"
             model_type = "vit_h"
@@ -91,6 +92,7 @@ class SegAny:
 
             #highest_score_mask = self.masks[np.argmax(self.scores)]
             highest_score_mask = self.masks[0]
+            self.bbox=bbox
             #torch.cuda.empty_cache()
             return highest_score_mask
         elif self.model=="nano":
@@ -119,6 +121,7 @@ class SegAny:
                 plt.imshow(self.image)
                 show_mask(mask, plt.gca())
                 show_points(self.input_point, self.input_label, plt.gca())
+                show_box(self.bbox, plt.gca())
                 plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
                 plt.axis('off')
                 #plt.show() 

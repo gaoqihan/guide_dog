@@ -5,7 +5,8 @@ import cv2
 from cv_bridge import CvBridge
 import numpy as np
 import os
-from sensor_msgs.msg import Image,CameraInfo
+from sensor_msgs.msg import CameraInfo
+from sensor_msgs.msg import Image as rImage
 from geometry_msgs.msg import PoseStamped, Pose
 from guide_dog.msg import ObjectDetectorAction, ObjDetectorFeedback, ObjDetectorResult  # Update with your actual action package and message names
 from std_srvs.srv import Empty, EmptyResponse  # Import the Empty service type and its response
@@ -22,6 +23,7 @@ from PIL import ImageDraw
 import argparse
 # Load environment variables from .env file
 load_dotenv()
+import shutil
 
 
     
@@ -55,7 +57,7 @@ class UserInputManagerServer(object):
         rospy.Subscriber('/describe_environment', String,self.describe_environment)
         rospy.Subscriber('/describe_object', String,self.describe_object)
         rospy.Subscriber('/read', String,self.read)
-
+        self.seg_mask_publisher=rospy.Publisher("/seg_mask",rImage,queue_size=10)
         self.describe_environment_complete_publisher=rospy.Publisher("/describe_environment_complete",String,queue_size=10)
         self.describe_object_complete_publisher=rospy.Publisher("/describe_object_complete",String,queue_size=10)
         self.read_complete_publisher=rospy.Publisher("/read_complete",String,queue_size=10)
@@ -215,12 +217,12 @@ class UserInputManagerServer(object):
             point_grid_enabled=False
             speech="I am sorry, I am not able to find the object you are looking for"
             speech=String(speech)
-            self.speak_to_user_publisher(speech)
-            rospy.sleep(5)
+            self.speak_to_user_publisher.publish(speech)
+            rospy.sleep(7)
         else:
             speech="I found what you want infront of us, I will now try to get its location"
             speech=String(speech)
-            self.speak_to_user_publisher(speech)
+            self.speak_to_user_publisher.publish(speech)
         
 
         print(owl_keyword,gpt_keyword,existence_check)
@@ -291,7 +293,9 @@ class UserInputManagerServer(object):
                 os.makedirs("./tmp/masked", exist_ok=True)
                 self.seg_any.get_mask_image(f"./tmp/masked/{str(i)}.png")            
                 #get depth point
-                
+                seg_mask=cv2.imread(f"./tmp/masked/0.png")
+                bridge=CvBridge()
+                self.seg_mask_publisher.publish(bridge.cv2_to_imgmsg(seg_mask))
                 best_rel_point=get3d_mask(rgbd_set.data[i][1],mask,info,i)
                 print("best rel point = ", best_rel_point)
                 print(f"the {owl_keyword} is at {best_rel_point}")
@@ -386,6 +390,11 @@ class UserInputManagerServer(object):
                         self.seg_any.encode(rgbd_set.data[i][0])
 
                         mask=self.seg_any.get_mask(bbox=(x1,y1,x2,y2))
+                        self.seg_any.get_mask_image(f"./tmp/masked/0.png")            
+                        #get depth point
+                        seg_mask=cv2.imread(f"./tmp/masked/0.png")
+                        bridge=CvBridge()
+                        self.seg_mask_publisher.publish(bridge.cv2_to_imgmsg(seg_mask))
                         best_rel_point=get3d_mask(rgbd_set.data[i][1],mask,info,i)
                         break
                     else:
@@ -518,6 +527,9 @@ def save_package(rgbd_set, bbox_list_list=[], labeled_image_list=[], alter_label
     # Create an alter_labeled_image folder inside the base_folder
     alter_labeled_image_folder = os.path.join(base_folder, 'alter_labeled_image')
     os.makedirs(alter_labeled_image_folder, exist_ok=True)
+    seg_mask_image_path="./tmp/masked/0.png"
+    new_seg_mask_path=os.path.join(base_folder, 'seg_mask.png')
+    shutil.copy(seg_mask_image_path,new_seg_mask_path)
     
     # Save each PIL image in alter_labeled_image_lists
     for idx, pil_image in enumerate(alter_labeled_image_lists):
